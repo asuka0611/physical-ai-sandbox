@@ -437,6 +437,47 @@ The initial task remains fixed-initial-condition grasp+lift. PPO can degrade
 from the BC-only baseline, and these smoke results are not full Pick-and-Place or
 generalization evidence.
 
+
+## macOS Application Bundle
+
+Build a macOS `.app` bundle:
+
+```bash
+bash scripts/clean_macos_build.sh
+bash scripts/build_macos_app.sh
+```
+
+Output:
+
+```text
+dist/Physical AI Sandbox.app
+```
+
+Launch the bundled app:
+
+```bash
+open "dist/Physical AI Sandbox.app"
+```
+
+The bundled app prepares Application Support and runs the control panel/runtime
+in the app process. Development launches still use managed subprocess cleanup,
+but the signed `.app` avoids spawning a second app executable from LaunchServices.
+Writable app data is stored under:
+
+```text
+~/Library/Application Support/Physical AI Sandbox/
+```
+
+The first launch copies `configs/default.yaml` into Application Support if it is
+missing. Runtime logs, replays, datasets, models, and crash reports also live
+under that directory. Phase 4.6 uses Ad Hoc signing only; Developer ID signing,
+notarization, and stapling are not complete.
+
+Detailed guides:
+
+- `docs/MACOS_APP_GUIDE_JA.md`
+- `docs/MACOS_APP_GUIDE_EN.md`
+
 ## Current Phase 1 Status
 
 Implemented:

@@ -52,3 +52,10 @@
 - XYZ controls are manual action presets mapped onto the existing fixed 8D joint-delta Action contract. They are not inverse kinematics and should not be interpreted as precise Cartesian control.
 - GUI verification still depends on local macOS windowing and `mjpython`. Automated tests cover UI state, command mapping, config compatibility, and MJCF physics-safe visual settings; true manual Viewer checks should be run from the user's Terminal.
 - The robot is still a lightweight generated Panda-style model, now with visual covers. It does not use official Franka meshes.
+
+## Phase 4.6
+
+- The macOS app bundle is configured for Apple Silicon and macOS 14+. Intel Mac support is not verified.
+- Phase 4.6 uses Ad Hoc signing only. Developer ID signing, Hardened Runtime, notarization, and stapling are not complete, so Gatekeeper may warn on first launch.
+- The app bundle depends on py2app collecting MuJoCo native runtime files. If py2app misses those resources, Viewer startup will fail and write a crash report.
+- `open` launch, direct executable launch, shutdown, signing, and resource checks were smoke-tested locally. Full human Pick-and-Place operation from Finder/Dock/Launchpad still needs a desktop manual pass.

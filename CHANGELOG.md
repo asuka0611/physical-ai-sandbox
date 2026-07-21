@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.6 - 2026-07-21
+
+- Added Phase 4.6 macOS `.app` packaging support targeting `dist/Physical AI Sandbox.app`.
+- Added macOS app launcher/runtime modules with Application Support path management, first-launch config copy, crash reports, and managed process cleanup for development launches.
+- Added bundled runtime bootstrap and LaunchServices-safe in-process `.app` startup; development launches still prefer `mjpython` when available.
+- Added Tkinter app menus for app, experiment, view, language, logs, guide, GitHub, and version actions.
+- Added py2app packaging setup, app runtime bootstrap, build/clean/run scripts, icon generation, and Ad Hoc codesign step.
+- Added macOS app guides and packaging documentation.
+- Added tests for app paths, resource resolution, first launch, runtime protocol, process management, shutdown, and packaging path hygiene.
+
 ## 0.4.5 - 2026-07-21
 
 - Added Phase 4.5 Japanese/English UI translation layer with safe fallback behavior.

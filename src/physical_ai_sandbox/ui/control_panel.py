@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
@@ -10,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from physical_ai_sandbox.app.paths import build_app_paths
 from physical_ai_sandbox.paths import DEFAULT_CONFIG_PATH
 from physical_ai_sandbox.scene.config import load_and_validate_config
 from physical_ai_sandbox.ui.i18n import Language, normalize_language, translate
@@ -309,6 +311,7 @@ class TkControlPanel:
         self._build()
         self._bind_keys()
         self._refresh()
+        self._build_menu()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def run(self) -> None:
@@ -316,6 +319,76 @@ class TkControlPanel:
         self.root.mainloop()
         self.runtime.stop()
         self.runtime.join()
+
+    def _build_menu(self) -> None:
+        menu = self.tk.Menu(self.root)
+        app_menu = self.tk.Menu(menu, tearoff=False)
+        app_menu.add_command(label="Physical AI Sandboxについて", command=self._show_about)
+        app_menu.add_command(label="設定", command=self._open_config_folder)
+        app_menu.add_command(label="ログフォルダを開く", command=self._open_logs_folder)
+        app_menu.add_separator()
+        app_menu.add_command(label="終了", command=self.close)
+        menu.add_cascade(label="Physical AI Sandbox", menu=app_menu)
+
+        experiment_menu = self.tk.Menu(menu, tearoff=False)
+        experiment_menu.add_command(label="開始", command=lambda: self._send("start"))
+        experiment_menu.add_command(label="一時停止", command=lambda: self._send("pause"))
+        experiment_menu.add_command(label="リセット", command=lambda: self._send("reset"))
+        experiment_menu.add_command(label="記録開始", command=lambda: self._send("start_recording"))
+        experiment_menu.add_command(label="記録停止", command=lambda: self._send("stop_recording"))
+        menu.add_cascade(label="実験", menu=experiment_menu)
+
+        view_menu = self.tk.Menu(menu, tearoff=False)
+        view_menu.add_command(
+            label="Viewerを前面に表示",
+            command=lambda: self._send("reset_camera"),
+        )
+        view_menu.add_command(label="操作パネルを前面に表示", command=self.root.lift)
+        view_menu.add_command(label="カメラをリセット", command=lambda: self._send("reset_camera"))
+        view_menu.add_separator()
+        view_menu.add_command(label="日本語", command=lambda: self._set_language("ja"))
+        view_menu.add_command(label="English", command=lambda: self._set_language("en"))
+        menu.add_cascade(label="表示", menu=view_menu)
+
+        help_menu = self.tk.Menu(menu, tearoff=False)
+        help_menu.add_command(label="操作ガイド", command=self._open_ui_guide)
+        help_menu.add_command(label="GitHubを開く", command=self._open_github)
+        help_menu.add_command(label="バージョン情報", command=self._show_about)
+        menu.add_cascade(label="ヘルプ", menu=help_menu)
+        self.root.config(menu=menu)
+
+    def _show_about(self) -> None:
+        from importlib.metadata import PackageNotFoundError, version
+        from tkinter import messagebox
+
+        try:
+            app_version = version("physical-ai-sandbox")
+        except PackageNotFoundError:
+            app_version = "0.0.0"
+        messagebox.showinfo(
+            "Physical AI Sandboxについて",
+            f"Physical AI Sandbox\nVersion {app_version}\nPhase 4.6",
+        )
+
+    def _open_path(self, path: Path) -> None:
+        path.mkdir(parents=True, exist_ok=True)
+        if subprocess.run(["open", str(path)], check=False).returncode != 0:
+            self.status_vars.get("last_event", self.tk.StringVar()).set(str(path))
+
+    def _open_logs_folder(self) -> None:
+        self._open_path(build_app_paths().logs_dir)
+
+    def _open_config_folder(self) -> None:
+        self._open_path(build_app_paths().config_dir)
+
+    def _open_ui_guide(self) -> None:
+        guide_name = "UI_GUIDE_JA.md" if self.language_var.get() == "ja" else "UI_GUIDE_EN.md"
+        guide_path = build_app_paths().resources_dir / "docs" / guide_name
+        if guide_path.exists():
+            subprocess.run(["open", str(guide_path)], check=False)
+
+    def _open_github(self) -> None:
+        subprocess.run(["open", "https://github.com/asuka0611/physical-ai-sandbox"], check=False)
 
     def close(self) -> None:
         self.runtime.stop()

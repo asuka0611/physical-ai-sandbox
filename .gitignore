@@ -19,6 +19,11 @@ htmlcov/
 /datasets/
 /models/
 
+# Packaging build outputs
+/build/
+/dist/
+/assets/app-icon/PhysicalAISandbox.iconset/
+
 # Environment variables / secrets
 .env
 .env.*
