@@ -1,27 +1,27 @@
 from __future__ import annotations
 
+import contextlib
+import os
+import secrets
+import shutil
+import signal
 import subprocess
+import sys
 import time
-from contextlib import nullcontext
-from dataclasses import dataclass, replace
+import traceback
+from dataclasses import replace
+from datetime import UTC, datetime
+from multiprocessing.connection import Connection, Listener
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from typing import Any
 
-import numpy as np
-
 from physical_ai_sandbox.app.paths import build_app_paths
 from physical_ai_sandbox.paths import DEFAULT_CONFIG_PATH
 from physical_ai_sandbox.scene.config import load_and_validate_config
-from physical_ai_sandbox.ui.i18n import Language, normalize_language, translate
-from physical_ai_sandbox.viewer_runtime import require_mjpython_on_macos
-
-
-@dataclass(frozen=True, slots=True)
-class PanelCommand:
-    name: str
-    value: str | float | int | None = None
+from physical_ai_sandbox.ui.control_types import ControlPanelSnapshot, PanelCommand
+from physical_ai_sandbox.ui.i18n import normalize_language, translate
 
 
 class ControlCommandQueue:
@@ -40,25 +40,6 @@ class ControlCommandQueue:
                 return commands
 
 
-@dataclass(frozen=True, slots=True)
-class ControlPanelSnapshot:
-    app_name: str = "Physical AI Sandbox"
-    running: bool = False
-    paused: bool = True
-    episode: int = 1
-    step: int = 0
-    max_steps: int = 0
-    reward: float = 0.0
-    grasped: bool = False
-    lifted: bool = False
-    success: bool = False
-    recording: bool = False
-    controller: str = "Manual Control"
-    environment: str = "panda_pick_place"
-    language: Language = "ja"
-    last_event: str = "ready"
-
-
 class ControlPanelStateStore:
     def __init__(self, initial: ControlPanelSnapshot | None = None) -> None:
         self._snapshot = initial or ControlPanelSnapshot()
@@ -73,53 +54,10 @@ class ControlPanelStateStore:
             self._snapshot = replace(self._snapshot, **changes)
             return self._snapshot
 
-
-class GuiActionMapper:
-    _ACTION_PRESETS: dict[str, tuple[float, float, float, float, float, float, float]] = {
-        "x_positive": (0.0, -0.45, 0.0, 0.55, 0.0, 0.20, 0.0),
-        "x_negative": (0.0, 0.45, 0.0, -0.55, 0.0, -0.20, 0.0),
-        "y_positive": (0.70, 0.0, 0.20, 0.0, 0.0, 0.0, 0.0),
-        "y_negative": (-0.70, 0.0, -0.20, 0.0, 0.0, 0.0, 0.0),
-        "z_positive": (0.0, -0.55, 0.0, -0.35, 0.0, 0.45, 0.0),
-        "z_negative": (0.0, 0.55, 0.0, 0.35, 0.0, -0.45, 0.0),
-        "rotate_positive": (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.75),
-        "rotate_negative": (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.75),
-    }
-
-    def __init__(self, step_size: float = 0.8) -> None:
-        self.step_size = step_size
-        self.gripper_closed = False
-        self._pending = np.zeros(7, dtype=float)
-
-    def apply(self, command: PanelCommand) -> str | None:
-        if command.name == "set_step_size" and command.value is not None:
-            self.step_size = float(np.clip(float(command.value), 0.1, 1.0))
-            return f"step size {self.step_size:.2f}"
-        if command.name == "open_gripper":
-            self.gripper_closed = False
-            return "gripper open"
-        if command.name == "close_gripper":
-            self.gripper_closed = True
-            return "gripper closed"
-        if command.name in self._ACTION_PRESETS:
-            preset = np.array(self._ACTION_PRESETS[command.name], dtype=float)
-            self._pending += preset * self.step_size
-            return command.name
-        if command.name in {"joint_positive", "joint_negative"} and command.value is not None:
-            index = int(command.value)
-            if not 0 <= index < 7:
-                raise ValueError(f"Joint index must be 0..6, got {index}")
-            direction = 1.0 if command.name == "joint_positive" else -1.0
-            self._pending[index] += direction * self.step_size
-            return f"joint {index + 1} {'positive' if direction > 0 else 'negative'}"
-        return None
-
-    def consume_action(self) -> list[float]:
-        action = np.zeros(8, dtype=float)
-        action[:7] = np.clip(self._pending, -1.0, 1.0)
-        action[7] = 1.0 if self.gripper_closed else -1.0
-        self._pending[:] = 0.0
-        return action.tolist()
+    def replace(self, snapshot: ControlPanelSnapshot) -> ControlPanelSnapshot:
+        with self._lock:
+            self._snapshot = snapshot
+            return self._snapshot
 
 
 class ControlPanelRuntime:
@@ -140,154 +78,227 @@ class ControlPanelRuntime:
         self.language = normalize_language(language)
         self.show_viewer = show_viewer
         self.stop_event = Event()
-        self._thread: Thread | None = None
-        self._mapper = GuiActionMapper()
+        self._listener: Listener | None = None
+        self._connection: Connection | None = None
+        self._process: subprocess.Popen[bytes] | None = None
+        self._io_thread: Thread | None = None
+        self._monitor_thread: Thread | None = None
+        self._log_file: Path | None = None
 
     def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
+        if self._process is not None and self._process.poll() is None:
             return
-        self._thread = Thread(target=self._run, name="physical-ai-control-panel-sim")
-        self._thread.start()
+        self.stop_event.clear()
+        try:
+            self._start_simulation_process()
+        except Exception as exc:
+            self._publish_startup_error(exc, traceback.format_exc())
 
     def stop(self) -> None:
         self.stop_event.set()
         self.command_queue.put("quit")
+        self._send_quit()
+        self._close_ipc()
+        self._terminate_process_tree()
 
     def join(self, timeout: float = 5.0) -> None:
-        if self._thread is not None:
-            self._thread.join(timeout=timeout)
+        deadline = time.monotonic() + timeout
+        for thread in (self._io_thread, self._monitor_thread):
+            if thread is None:
+                continue
+            remaining = max(0.0, deadline - time.monotonic())
+            thread.join(timeout=remaining)
 
-    def _run(self) -> None:
-        if self.show_viewer:
-            require_mjpython_on_macos()
+    def _start_simulation_process(self) -> None:
+        authkey = secrets.token_bytes(16)
+        listener = Listener(("127.0.0.1", 0), authkey=authkey)
+        self._listener = listener
+        host, port = listener.address
+        app_paths = build_app_paths()
+        app_paths.logs_dir.mkdir(parents=True, exist_ok=True)
+        self._log_file = app_paths.logs_dir / "control_panel_simulation.log"
+        log_handle = self._log_file.open("ab")
+        command = self._build_simulation_command(host, int(port), authkey.hex())
+        self._process = subprocess.Popen(
+            command,
+            cwd=str(Path.cwd()),
+            stdout=log_handle,
+            stderr=log_handle,
+            start_new_session=(os.name != "nt"),
+        )
+        log_handle.close()
+        self._io_thread = Thread(target=self._io_loop, name="physical-ai-control-panel-ipc")
+        self._io_thread.daemon = True
+        self._io_thread.start()
+        self._monitor_thread = Thread(
+            target=self._monitor_process,
+            name="physical-ai-control-panel-monitor",
+        )
+        self._monitor_thread.daemon = True
+        self._monitor_thread.start()
 
-        from physical_ai_sandbox.envs.panda_pick_place import PandaPickPlaceEnv
+    def _build_simulation_command(self, host: str, port: int, authkey: str) -> list[str]:
+        module_args = [
+            "-m",
+            "physical_ai_sandbox.ui.simulation_process",
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--authkey",
+            authkey,
+            "--config",
+            str(self.config_path),
+            "--language",
+            self.language,
+        ]
+        if not self.show_viewer:
+            return [sys.executable, *module_args, "--no-viewer"]
+        uv_path = shutil.which("uv")
+        if uv_path is None:
+            raise RuntimeError("uv が見つかりません。ログインシェルの PATH を確認してください。")
+        return [uv_path, "run", "mjpython", *module_args]
 
-        env = PandaPickPlaceEnv(self.config_path)
-        max_steps = max(1, int(env.evaluator.time_limit_seconds / env.dt))
-        running = False
-        paused = True
-        episode = 1
-        step = 0
-        reward = 0.0
-        last_event = "ready"
-        if self.show_viewer:
-            import mujoco.viewer
-
-            viewer_context = mujoco.viewer.launch_passive(env.model, env.data)
-        else:
-            viewer_context = nullcontext(None)
+    def _io_loop(self) -> None:
         try:
-            with viewer_context as viewer:
-                while not self.stop_event.is_set():
-                    if viewer is not None and not viewer.is_running():
-                        self.stop_event.set()
-                        break
-                    for command in self.command_queue.drain():
-                        (
-                            running,
-                            paused,
-                            episode,
-                            step,
-                            last_event,
-                        ) = self._handle_runtime_command(
-                            command,
-                            env,
-                            viewer,
-                            running,
-                            paused,
-                            episode,
-                            step,
-                            last_event,
-                        )
-                    if running and not paused:
-                        observation, reward, terminated, truncated, _info = env.step(
-                            self._mapper.consume_action(),
-                        )
-                        step += 1
-                        lifted = observation["cube_position"][2] > env.evaluator.table_top_z + 0.05
-                        if terminated or truncated or step >= max_steps:
-                            last_event = "success" if observation["is_success"] else "failure"
-                            episode += 1
-                            step = 0
-                            env.reset()
-                    else:
-                        observation = env._observation()
-                        lifted = observation["cube_position"][2] > env.evaluator.table_top_z + 0.05
-                    self.state_store.update(
-                        running=running,
-                        paused=paused,
-                        episode=episode,
-                        step=step,
-                        max_steps=max_steps,
-                        reward=reward,
-                        grasped=bool(observation["is_grasped"]),
-                        lifted=bool(lifted),
-                        success=bool(observation["is_success"]),
-                        recording=env.recorder.is_recording,
-                        language=self.language,
-                        last_event=last_event,
-                    )
-                    if viewer is not None:
-                        viewer.sync()
-                    time.sleep(env.dt)
-        finally:
-            env.close()
+            if self._listener is None:
+                return
+            connection = self._listener.accept()
+            self._connection = connection
+            while not self.stop_event.is_set():
+                for command in self.command_queue.drain():
+                    try:
+                        connection.send(command.to_message())
+                    except (BrokenPipeError, EOFError, OSError):
+                        return
+                while connection.poll(0.02):
+                    message = connection.recv()
+                    if isinstance(message, dict):
+                        self._handle_message(message)
+                time.sleep(0.02)
+        except (EOFError, OSError):
+            if not self.stop_event.is_set():
+                self.state_store.update(running=False, paused=True, last_event="viewer stopped")
+        except Exception as exc:
+            if not self.stop_event.is_set():
+                self._publish_startup_error(exc, traceback.format_exc())
+
+    def _handle_message(self, message: dict[str, object]) -> None:
+        message_type = message.get("type")
+        if message_type == "snapshot":
+            snapshot = ControlPanelSnapshot.from_message(message)
+            if snapshot.language != self.language:
+                snapshot = replace(snapshot, language=self.language)
+            self.state_store.replace(snapshot)
+            return
+        if message_type == "error":
+            error_message = str(message.get("message") or "Viewerを起動できませんでした。")
+            traceback_text = str(message.get("traceback") or "")
+            report_path = self._write_crash_report(error_message, traceback_text)
             self.state_store.update(
                 running=False,
                 paused=True,
-                recording=False,
-                last_event="stopped",
+                max_steps=1,
+                last_event="起動失敗",
+                error_message=f"{error_message}\n\nCrash report: {report_path}",
             )
 
-    def _handle_runtime_command(
-        self,
-        command: PanelCommand,
-        env: Any,
-        viewer: Any,
-        running: bool,
-        paused: bool,
-        episode: int,
-        step: int,
-        last_event: str,
-    ) -> tuple[bool, bool, int, int, str]:
-        if command.name == "quit":
-            self.stop_event.set()
-            return False, True, episode, step, "quit"
-        if command.name == "start":
-            return True, False, episode, step, "start"
-        if command.name == "pause":
-            return running, True, episode, step, "paused"
-        if command.name == "resume":
-            return True, False, episode, step, "resumed"
-        if command.name == "toggle_pause":
-            return True, not paused, episode, step, "paused" if not paused else "resumed"
-        if command.name == "reset":
-            env.reset()
-            return running, paused, episode + 1, 0, "reset"
-        if command.name == "start_recording":
-            if not env.recorder.is_recording:
-                env.start_recording({"mode": "control_panel"})
-            return running, paused, episode, step, "recording started"
-        if command.name == "stop_recording":
-            if env.recorder.is_recording:
-                env.stop_recording({"mode": "control_panel"})
-            return running, paused, episode, step, "recording stopped"
-        if command.name == "toggle_recording":
-            if env.recorder.is_recording:
-                env.stop_recording({"mode": "control_panel"})
-                return running, paused, episode, step, "recording stopped"
-            env.start_recording({"mode": "control_panel"})
-            return running, paused, episode, step, "recording started"
-        if command.name == "reset_camera":
-            if viewer is not None:
-                viewer.cam.azimuth = 135
-                viewer.cam.elevation = -25
-                viewer.cam.distance = 1.35
-                viewer.cam.lookat[:] = [0.45, 0.0, 0.55]
-            return running, paused, episode, step, "camera reset"
-        mapper_event = self._mapper.apply(command)
-        return running, paused, episode, step, mapper_event or last_event
+    def _monitor_process(self) -> None:
+        process = self._process
+        if process is None:
+            return
+        returncode = process.wait()
+        if self.stop_event.is_set():
+            return
+        if returncode != 0:
+            self.state_store.update(
+                running=False,
+                paused=True,
+                max_steps=1,
+                last_event=f"process exited {returncode}",
+                error_message=(
+                    f"Viewer process exited with status {returncode}. Log: {self._log_file}"
+                ),
+            )
+        else:
+            self.state_store.update(running=False, paused=True, last_event="viewer closed")
+
+    def _send_quit(self) -> None:
+        connection = self._connection
+        if connection is None:
+            return
+        with contextlib.suppress(BrokenPipeError, EOFError, OSError):
+            connection.send(PanelCommand("quit").to_message())
+
+    def _close_ipc(self) -> None:
+        if self._connection is not None:
+            with contextlib.suppress(OSError):
+                self._connection.close()
+            self._connection = None
+        if self._listener is not None:
+            with contextlib.suppress(OSError):
+                self._listener.close()
+            self._listener = None
+
+    def _terminate_process_tree(self) -> None:
+        process = self._process
+        if process is None or process.poll() is not None:
+            return
+        try:
+            process.wait(timeout=2.0)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            if os.name != "nt":
+                os.killpg(process.pid, signal.SIGTERM)
+            else:
+                process.terminate()
+            process.wait(timeout=3.0)
+            return
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            pass
+        if process.poll() is None:
+            try:
+                if os.name != "nt":
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+            except ProcessLookupError:
+                pass
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=1.0)
+
+    def _publish_startup_error(self, exc: BaseException, traceback_text: str) -> None:
+        report_path = self._write_crash_report(str(exc), traceback_text)
+        self.state_store.update(
+            running=False,
+            paused=True,
+            max_steps=1,
+            last_event="起動失敗",
+            error_message=f"{exc}\n\nCrash report: {report_path}",
+        )
+
+    def _write_crash_report(self, message: str, traceback_text: str) -> Path:
+        crash_dir = build_app_paths().crash_reports_dir
+        crash_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
+        path = crash_dir / f"control_panel_viewer_{timestamp}.log"
+        path.write_text(
+            "\n".join(
+                [
+                    "app: Physical AI Sandbox",
+                    "phase: 4.6",
+                    f"error: {message}",
+                    f"simulation_log: {self._log_file}",
+                    "traceback:",
+                    traceback_text,
+                ],
+            ),
+            encoding="utf-8",
+        )
+        return path
+
 
 
 class TkControlPanel:
@@ -308,6 +319,7 @@ class TkControlPanel:
         self.status_vars: dict[str, Any] = {}
         self.buttons: dict[str, Any] = {}
         self.labels: dict[str, Any] = {}
+        self._shown_error_message: str | None = None
         self._build()
         self._bind_keys()
         self._refresh()
@@ -595,10 +607,20 @@ class TkControlPanel:
             self.language_var.set(language)
             self._render_text()
         state_key = "running" if snapshot.running and not snapshot.paused else "paused"
-        if not snapshot.running:
+        if snapshot.error_message:
+            state_key = "ready"
+            if self._shown_error_message != snapshot.error_message:
+                self._shown_error_message = snapshot.error_message
+                from tkinter import messagebox
+
+                messagebox.showerror("Viewer起動失敗", snapshot.error_message)
+        elif not snapshot.running:
             state_key = "ready"
         self.status_vars["episode"].set(str(snapshot.episode))
-        self.status_vars["step"].set(f"{snapshot.step} / {snapshot.max_steps}")
+        if snapshot.error_message and snapshot.max_steps <= 1:
+            self.status_vars["step"].set("起動失敗")
+        else:
+            self.status_vars["step"].set(f"{snapshot.step} / {snapshot.max_steps}")
         self.status_vars["reward"].set(f"{snapshot.reward:.3f}")
         self.status_vars["grasped"].set(self._bool_text(snapshot.grasped, language))
         self.status_vars["lifted"].set(self._bool_text(snapshot.lifted, language))

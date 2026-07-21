@@ -57,7 +57,6 @@
 
 - `Physical AI Sandbox Launcher.app` is local-only. It is not self-contained and is not suitable for distribution to another Mac.
 - The project path is fixed to `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`; moving the checkout requires updating `packaging/macos/LocalLauncher.swift` and rebuilding.
-- The local environment must already have `uv sync` completed and `uv run mjpython` working.
-- Because the project lives under `~/Documents`, the first launch may require selecting the project folder in the macOS folder access dialog.
-- MuJoCo Viewer visual confirmation from the Launcher requires completing that first-launch folder access step. Automated tests cover packaging and launcher code paths, not human visual inspection of the Viewer window.
+- The local environment must already have `uv sync` completed and `uv` visible from the login shell PATH.
+- The Launcher leaves a LaunchAgent plist under `~/Library/Application Support/Physical AI Sandbox Launcher/`; this is used only to start the local UI without Terminal.
 - Developer ID signing, notarization, bundled Python/MuJoCo, Intel support, and public distribution packaging are intentionally out of scope for this local Launcher.

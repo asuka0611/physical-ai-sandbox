@@ -475,17 +475,18 @@ Local requirements:
 - Dependencies have already been installed with `uv sync`.
 - `mjpython` is available through `uv run mjpython`.
 
-On first launch, macOS may require selecting the project folder in a Japanese
-folder access dialog because the project lives under `~/Documents`. Logs are
-stored under:
+The Launcher uses a user LaunchAgent to start the local development command,
+so Terminal is not opened and the short-lived Launcher process exits after
+startup. Logs are stored under:
 
 ```text
 ~/Library/Logs/Physical AI Sandbox Launcher/
 ```
 
 The Launcher prevents duplicate `run_control_panel.py` processes and reports
-startup failures with a Japanese dialog. It does not bundle Python, MuJoCo,
-datasets, checkpoints, or project dependencies.
+startup failures with a Japanese dialog. The Tk control panel runs under normal
+Python, while MuJoCo Viewer runs in a separate `mjpython` simulation process. It
+does not bundle Python, MuJoCo, datasets, checkpoints, or project dependencies.
 
 Detailed guides:
 

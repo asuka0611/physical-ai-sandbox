@@ -8,12 +8,15 @@ dist/Physical AI Sandbox Launcher.app
 
 This is not a self-contained or distributable macOS application. It is a small
 Swift/Cocoa launcher for this Mac that starts the existing local development
-control panel command without opening Terminal:
+control panel without opening Terminal:
 
 ```bash
 cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
+
+The operation panel runs under normal Python/Tkinter. The MuJoCo Viewer and
+simulation run in a separate `mjpython` process started by the UI.
 
 ## Build
 
@@ -28,8 +31,14 @@ bash scripts/build_macos_app.sh
 open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-On first launch, macOS may ask for access to the project folder under
-`~/Documents`. Select `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
+The Launcher writes a LaunchAgent plist under:
+
+```text
+~/Library/Application Support/Physical AI Sandbox Launcher/
+```
+
+It then bootstraps/kickstarts that LaunchAgent and exits. The LaunchAgent starts
+`uv run python scripts/run_control_panel.py` in the local checkout.
 
 ## Local Requirements
 
@@ -37,15 +46,6 @@ On first launch, macOS may ask for access to the project folder under
 - `uv` is installed and visible from the login shell PATH.
 - `uv sync` has already been run.
 - `uv run mjpython` works in the project checkout.
-
-## Included Resources
-
-- Swift launcher executable.
-- App icon when available.
-- Info.plist metadata.
-
-The app does not include Python, MuJoCo, dependencies, datasets, model
-checkpoints, logs, or project source files.
 
 ## Logs
 

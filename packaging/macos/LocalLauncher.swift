@@ -1,8 +1,9 @@
 import Cocoa
+import Darwin
 import Foundation
 
 private let projectPath = "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
-private let appName = "Physical AI Sandbox Launcher"
+private let jobLabel = "com.asuka0611.physical-ai-sandbox.control-panel"
 
 final class Logger {
     let logDir: URL
@@ -23,16 +24,14 @@ final class Logger {
 
     func write(_ message: String) {
         let line = message + "\n"
-        if let data = line.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logFile.path) {
-                if let handle = try? FileHandle(forWritingTo: logFile) {
-                    _ = try? handle.seekToEnd()
-                    try? handle.write(contentsOf: data)
-                    try? handle.close()
-                }
-            } else {
-                try? data.write(to: logFile)
-            }
+        guard let data = line.data(using: .utf8) else { return }
+        if FileManager.default.fileExists(atPath: logFile.path),
+           let handle = try? FileHandle(forWritingTo: logFile) {
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+            try? handle.close()
+        } else {
+            try? data.write(to: logFile)
         }
     }
 
@@ -45,27 +44,17 @@ final class Logger {
 
 final class LauncherApp: NSObject, NSApplicationDelegate {
     private var logger: Logger!
-    private var controlPanelProcess: Process?
-    private var accessURL: URL?
-    private var startedSecurityScope = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         do {
             logger = try Logger()
             try launch()
+            NSApp.terminate(nil)
         } catch {
             showError("起動に失敗しました", error.localizedDescription)
             NSApp.terminate(nil)
         }
-    }
-
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if let process = controlPanelProcess, process.isRunning {
-            process.terminate()
-        }
-        stopSecurityScope()
-        return .terminateNow
     }
 
     private func launch() throws {
@@ -73,86 +62,36 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
         guard FileManager.default.fileExists(atPath: projectPath) else {
             throw LauncherError.message("プロジェクトフォルダが見つかりません: \(projectPath)")
         }
-
         if let existingPID = existingControlPanelPID() {
             writePID(existingPID)
             logger.write("既に起動中です: PID \(existingPID)")
-            NSApp.terminate(nil)
             return
         }
-
-        try ensureProjectAccess()
         let uvPath = try findUV()
         logger.write("uv: \(uvPath)")
-        try verifyMJPython(uvPath: uvPath)
-        try startControlPanel(uvPath: uvPath)
-    }
-
-    private func ensureProjectAccess() throws {
-        let url = URL(fileURLWithPath: projectPath, isDirectory: true)
-        if let bookmarkURL = try restoreBookmarkedProjectURL(expectedURL: url) {
-            accessURL = bookmarkURL
-            startedSecurityScope = bookmarkURL.startAccessingSecurityScopedResource()
-            logger.write("project access: restored bookmark")
-            return
+        let plistURL = try writeLaunchAgentPlist(uvPath: uvPath)
+        let domain = "gui/\(getuid())"
+        _ = try? runAndCapture(
+            executable: "/bin/launchctl",
+            arguments: ["bootout", domain, plistURL.path],
+            currentDirectory: URL(fileURLWithPath: "/"),
+            logFailure: false
+        )
+        _ = try runAndCapture(
+            executable: "/bin/launchctl",
+            arguments: ["bootstrap", domain, plistURL.path],
+            currentDirectory: URL(fileURLWithPath: "/")
+        )
+        _ = try runAndCapture(
+            executable: "/bin/launchctl",
+            arguments: ["kickstart", "\(domain)/\(jobLabel)"],
+            currentDirectory: URL(fileURLWithPath: "/")
+        )
+        guard let pid = waitForControlPanelPID(timeoutSeconds: 10.0) else {
+            throw LauncherError.message("Control Panelプロセスを確認できませんでした。ログ: \(logger.logFile.path)")
         }
-
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        let panel = NSOpenPanel()
-        panel.title = "プロジェクトフォルダへのアクセス許可"
-        panel.message = "Physical AI Sandbox Launcher がローカル開発環境を起動するため、プロジェクトフォルダへのアクセスを許可してください。"
-        panel.prompt = "許可"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = url.deletingLastPathComponent()
-
-        guard panel.runModal() == .OK, let selected = panel.url else {
-            throw LauncherError.message("プロジェクトフォルダへのアクセスが許可されませんでした。")
-        }
-        let selectedPath = selected.standardizedFileURL.path
-        guard selectedPath == url.standardizedFileURL.path else {
-            throw LauncherError.message("指定されたプロジェクトフォルダを選択してください: \(projectPath)")
-        }
-        accessURL = selected
-        startedSecurityScope = selected.startAccessingSecurityScopedResource()
-        try saveBookmark(for: selected)
-        logger.write("project access: selected by user")
-        NSApp.setActivationPolicy(.accessory)
-    }
-
-    private func bookmarkFileURL() throws -> URL {
-        let base = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Physical AI Sandbox Launcher", isDirectory: true)
-        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        return base.appendingPathComponent("project-folder.bookmark")
-    }
-
-    private func saveBookmark(for url: URL) throws {
-        let data = try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
-        try data.write(to: try bookmarkFileURL(), options: .atomic)
-    }
-
-    private func restoreBookmarkedProjectURL(expectedURL: URL) throws -> URL? {
-        let fileURL = try bookmarkFileURL()
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return nil
-        }
-        do {
-            let data = try Data(contentsOf: fileURL)
-            var stale = false
-            let restored = try URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale)
-            if stale || restored.standardizedFileURL.path != expectedURL.standardizedFileURL.path {
-                try? FileManager.default.removeItem(at: fileURL)
-                return nil
-            }
-            return restored
-        } catch {
-            logger?.write("project bookmark ignored: \(error.localizedDescription)")
-            try? FileManager.default.removeItem(at: fileURL)
-            return nil
-        }
+        writePID(pid)
+        logger.write("起動しました: PID \(pid)")
     }
 
     private func findUV() throws -> String {
@@ -167,58 +106,50 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
         return output
     }
 
-    private func verifyMJPython(uvPath: String) throws {
-        _ = try runAndCapture(
-            executable: uvPath,
-            arguments: ["run", "mjpython", "-c", "import sys; print(sys.executable)"],
-            currentDirectory: URL(fileURLWithPath: projectPath, isDirectory: true)
-        )
+    private func writeLaunchAgentPlist(uvPath: String) throws -> URL {
+        let supportDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Physical AI Sandbox Launcher", isDirectory: true)
+        try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
+        let plistURL = supportDir.appendingPathComponent("\(jobLabel).plist")
+        let command = "cd \(shellQuote(projectPath)) && exec \(shellQuote(uvPath)) run python scripts/run_control_panel.py"
+        let plist = """
+        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+        <plist version=\"1.0\">
+        <dict>
+          <key>Label</key>
+          <string>\(jobLabel)</string>
+          <key>ProgramArguments</key>
+          <array>
+            <string>/bin/zsh</string>
+            <string>-l</string>
+            <string>-c</string>
+            <string>\(xmlEscape(command))</string>
+          </array>
+          <key>WorkingDirectory</key>
+          <string>\(xmlEscape(projectPath))</string>
+          <key>StandardOutPath</key>
+          <string>\(xmlEscape(logger.logFile.path))</string>
+          <key>StandardErrorPath</key>
+          <string>\(xmlEscape(logger.logFile.path))</string>
+        </dict>
+        </plist>
+        """
+        try plist.write(to: plistURL, atomically: true, encoding: .utf8)
+        logger.write("launch agent: \(plistURL.path)")
+        logger.write("起動コマンド: cd '\(projectPath)' && uv run python scripts/run_control_panel.py")
+        return plistURL
     }
 
-    private func startControlPanel(uvPath: String) throws {
-        let logHandle = try FileHandle(forWritingTo: logger.logFile)
-        try logHandle.seekToEnd()
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: uvPath)
-        process.arguments = ["run", "mjpython", "scripts/run_control_panel.py"]
-        process.currentDirectoryURL = URL(fileURLWithPath: projectPath, isDirectory: true)
-        var environment = ProcessInfo.processInfo.environment
-        environment["ApplePersistenceIgnoreState"] = "YES"
-        process.environment = environment
-        process.standardOutput = logHandle
-        process.standardError = logHandle
-        process.terminationHandler = { [weak self] child in
-            self?.logger.write("Control Panel exited: status \(child.terminationStatus)")
-            self?.stopSecurityScope()
-            DispatchQueue.main.async {
-                NSApp.terminate(nil)
+    private func waitForControlPanelPID(timeoutSeconds: TimeInterval) -> Int? {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while Date() < deadline {
+            if let pid = existingControlPanelPID() {
+                return pid
             }
+            Thread.sleep(forTimeInterval: 0.2)
         }
-
-        logger.write("起動コマンド: cd '\(projectPath)' && uv run mjpython scripts/run_control_panel.py")
-        try process.run()
-        controlPanelProcess = process
-        writePID(Int(process.processIdentifier))
-        logger.write("起動しました: PID \(process.processIdentifier)")
-    }
-
-    private func runAndCapture(executable: String, arguments: [String], currentDirectory: URL) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.currentDirectoryURL = currentDirectory
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        try process.run()
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if process.terminationStatus != 0 {
-            logger.write(output.trimmingCharacters(in: .whitespacesAndNewlines))
-            throw LauncherError.message(output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "コマンドが失敗しました: \(executable)" : output)
-        }
-        return output
+        return nil
     }
 
     private func existingControlPanelPID() -> Int? {
@@ -233,16 +164,36 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
         return Int(output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    private func runAndCapture(
+        executable: String,
+        arguments: [String],
+        currentDirectory: URL,
+        logFailure: Bool = true
+    ) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.currentDirectoryURL = currentDirectory
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        if process.terminationStatus != 0 {
+            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if logFailure, !trimmed.isEmpty {
+                logger.write(trimmed)
+            }
+            throw LauncherError.message(trimmed.isEmpty ? "コマンドが失敗しました: \(executable)" : output)
+        }
+        return output
+    }
+
     private func writePID(_ pid: Int) {
         let pidFile = logger.logDir.appendingPathComponent("control-panel.pid")
         try? "\(pid)\n".write(to: pidFile, atomically: true, encoding: .utf8)
-    }
-
-    private func stopSecurityScope() {
-        if startedSecurityScope, let accessURL {
-            accessURL.stopAccessingSecurityScopedResource()
-            startedSecurityScope = false
-        }
     }
 
     private func showError(_ title: String, _ message: String) {
@@ -256,6 +207,19 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "OK")
         alert.runModal()
     }
+}
+
+private func shellQuote(_ value: String) -> String {
+    return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+}
+
+private func xmlEscape(_ value: String) -> String {
+    return value
+        .replacingOccurrences(of: "&", with: "&amp;")
+        .replacingOccurrences(of: "<", with: "&lt;")
+        .replacingOccurrences(of: ">", with: "&gt;")
+        .replacingOccurrences(of: "\"", with: "&quot;")
+        .replacingOccurrences(of: "'", with: "&apos;")
 }
 
 enum LauncherError: LocalizedError {

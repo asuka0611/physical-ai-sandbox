@@ -8,8 +8,10 @@
 
 ```bash
 cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
+
+操作パネルは通常Python/Tkinterで起動し、MuJoCo Viewerは別の `mjpython` simulation process で起動します。
 
 ## 必要条件
 
@@ -37,7 +39,7 @@ dist/Physical AI Sandbox Launcher.app
 open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-初回起動時、macOSがプロジェクトフォルダへのアクセス許可を求める場合があります。その場合は `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox` を選択してください。
+LauncherはユーザーLaunchAgentを使ってローカルUIを起動し、Launcher自身は起動後に終了します。二重起動時は既存の `run_control_panel.py` を検出し、新しいプロセスを増やしません。
 
 ## ログ
 

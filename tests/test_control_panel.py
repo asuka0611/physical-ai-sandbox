@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from physical_ai_sandbox.ui.control_panel import (
-    ControlCommandQueue,
+from physical_ai_sandbox.ui.control_panel import ControlCommandQueue, ControlPanelStateStore
+from physical_ai_sandbox.ui.control_types import (
     ControlPanelSnapshot,
-    ControlPanelStateStore,
     GuiActionMapper,
     PanelCommand,
 )
@@ -54,3 +53,38 @@ def test_gui_action_mapper_opens_gripper_and_clips_step_size() -> None:
 
     assert max(abs(value) for value in action[:7]) <= 1.0
     assert action[7] == -1.0
+
+
+def test_snapshot_message_roundtrip() -> None:
+    snapshot = ControlPanelSnapshot(step=5, max_steps=1000, last_event="ready", language="ja")
+
+    restored = ControlPanelSnapshot.from_message(snapshot.to_message())
+
+    assert restored.step == 5
+    assert restored.max_steps == 1000
+    assert restored.last_event == "ready"
+
+
+def test_runtime_uses_separate_mjpython_viewer_process() -> None:
+    runtime = __import__(
+        "physical_ai_sandbox.ui.control_panel",
+        fromlist=["ControlPanelRuntime"],
+    ).ControlPanelRuntime(show_viewer=True)
+
+    command = runtime._build_simulation_command("127.0.0.1", 12345, "00")
+
+    assert command[:3] == [command[0], "run", "mjpython"]
+    assert "physical_ai_sandbox.ui.simulation_process" in command
+
+
+def test_runtime_no_viewer_uses_current_python() -> None:
+    runtime = __import__(
+        "physical_ai_sandbox.ui.control_panel",
+        fromlist=["ControlPanelRuntime"],
+    ).ControlPanelRuntime(show_viewer=False)
+
+    command = runtime._build_simulation_command("127.0.0.1", 12345, "00")
+
+    assert command[1] == "-m"
+    assert "physical_ai_sandbox.ui.simulation_process" in command
+    assert "--no-viewer" in command

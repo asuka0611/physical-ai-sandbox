@@ -3,9 +3,11 @@
 ## 0.4.6 - 2026-07-21
 
 - Replaced the self-contained py2app macOS app plan with a local-only `Physical AI Sandbox Launcher.app`.
-- Added a Swift/Cocoa Launcher that runs the existing local command `uv run mjpython scripts/run_control_panel.py` without opening Terminal.
-- Added duplicate `run_control_panel.py` prevention, Japanese failure dialogs, and logs under `~/Library/Logs/Physical AI Sandbox Launcher/`.
-- Added macOS project-folder access handling for the fixed local project path under `~/Documents`.
+- Added a Swift/Cocoa Launcher that starts a user LaunchAgent without opening Terminal.
+- Changed the local app startup path to run Tkinter under normal Python and MuJoCo Viewer in a separate `mjpython` simulation process.
+- Added `multiprocessing.connection` IPC between the operation panel and simulation process.
+- Added duplicate `run_control_panel.py` prevention, Japanese failure dialogs, Viewer crash reports, and process-group cleanup.
+- Verified Launcher startup, operation panel window, MuJoCo Viewer window, keyboard-driven UI updates, duplicate launch prevention, Terminal-free startup, and process cleanup.
 - Updated build/clean/run scripts, packaging tests, macOS guides, and Phase 4.6 status for the local Launcher strategy.
 
 ## 0.4.5 - 2026-07-21
