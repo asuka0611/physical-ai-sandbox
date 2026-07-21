@@ -438,6 +438,39 @@ from the BC-only baseline, and these smoke results are not full Pick-and-Place o
 generalization evidence.
 
 
+
+## Policy Evaluation
+
+Phase 5 adds a headless policy evaluation foundation for fixed-initial-condition grasp+lift comparisons.
+
+Evaluate one policy:
+
+```bash
+uv run python scripts/evaluate_policy.py \
+  --policy bc \
+  --model models/bc_grasp_lift_v1 \
+  --episodes 20 \
+  --seed 42 \
+  --headless \
+  --max-steps 200 \
+  --output logs/evaluation/bc_seed42.json
+```
+
+Compare policies with the same seed contract:
+
+```bash
+uv run python scripts/compare_policies.py \
+  --policies random,bc,ppo \
+  --bc-model models/bc_grasp_lift_v1 \
+  --ppo-model models/ppo_grasp_lift_bc_smoke \
+  --episodes 10 \
+  --seed 42 \
+  --max-steps 200 \
+  --output-dir logs/evaluation/compare_seed42
+```
+
+Outputs include JSON, CSV, and Markdown summaries. Current results are fixed-condition grasp+lift smoke checks only; UI evaluation controls and Viewer replay are still pending. See `docs/policy_evaluation.md`.
+
 ## macOS Local Launcher
 
 Build a local-only macOS launcher app:

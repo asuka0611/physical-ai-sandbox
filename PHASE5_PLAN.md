@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 5 implementation has not been started in this change set. Phase 4.6 was prioritized and repaired first. This document records the agreed design so Phase 5 can start without re-discovery.
+Phase 5 headless policy evaluation has started. The shared Policy interface, headless evaluation runner, comparison CLI, and JSON/CSV/Markdown outputs are implemented. UI evaluation controls and Viewer trajectory replay remain planned work.
 
 ## Goal
 
@@ -18,7 +18,7 @@ Turn Physical AI Sandbox into an experiment environment that can compare and eva
 - Replay-ready action trajectory metadata.
 - Minimal UI integration after the runner is stable.
 
-## Proposed Files
+## Implemented Files
 
 - `src/physical_ai_sandbox/policies/base.py`
 - `src/physical_ai_sandbox/policies/manual.py`
@@ -33,6 +33,8 @@ Turn Physical AI Sandbox into an experiment environment that can compare and eva
 - `scripts/compare_policies.py`
 - `docs/policy_evaluation.md`
 - `PHASE5_COMPLETION_STATUS.md`
+
+Pending UI/replay files should be added only after the CLI runner remains stable.
 
 ## Policy Interface
 

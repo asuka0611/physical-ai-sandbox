@@ -2,19 +2,41 @@
 
 Last updated: 2026-07-22
 
-Phase 5 is not implemented yet.
+Phase 5 is partially complete as a headless policy evaluation foundation. The UI integration and Viewer replay workflow remain pending.
 
-This change set focused on completing Phase 4.6 macOS Launcher reliability. Phase 5 design has been captured in `PHASE5_PLAN.md`, but no Phase 5 runtime, policy interface, evaluation runner, comparison CLI, or UI evaluation workflow has been marked complete.
+## Completed
 
-## Current State
+- Shared `Policy` interface with `reset()`, `act()`, `close()`, and `metadata()`.
+- `PolicyAction` safety wrapper with fixed 8D action contract and clipping.
+- `RandomPolicy` with seed reproducibility.
+- `ManualPolicy` placeholder for the shared contract; automated manual comparison remains out of scope.
+- `BehaviorCloningPolicy` adapter using the existing `BehaviorCloningController` and training-time normalization.
+- `PPOPolicy` adapter using existing PPO checkpoint loading, observation normalization, deterministic/stochastic action path, action clipping, and NaN/Inf safe stop.
+- Headless multi-episode `evaluate_policy` runner.
+- `scripts/evaluate_policy.py` CLI.
+- Same-seed `compare_policies` runner.
+- `scripts/compare_policies.py` CLI.
+- JSON and CSV episode outputs.
+- Markdown comparison summary.
+- Action trajectory storage in evaluation JSON.
+- Automated tests for Policy interface behavior, Random/BC/PPO loading, deterministic action path, JSON/CSV saving, seed reproducibility, invalid model paths, comparison aggregation, and unsupported viewer mode.
 
-- Phase 5 plan: drafted.
-- Policy common interface: not implemented.
-- Evaluation runner: not implemented.
-- Comparison CLI: not implemented.
-- UI evaluation integration: not implemented.
-- BC/PPO shared-interface real evaluation: not run.
+## Verification Results
+
+- `uv run ruff check .`: passed after Phase 5 additions.
+- `uv run pytest tests/test_policy_evaluation.py`: passed, 6 tests.
+- BC real evaluation: passed with `models/bc_grasp_lift_v1`, 1 Episode, seed 42, headless.
+- PPO real evaluation: passed with `models/ppo_grasp_lift_bc_smoke`, 1 Episode, seed 42, headless.
+- Random/BC/PPO comparison: passed with 1 Episode each, seed 42; JSON/CSV/Markdown outputs generated under `logs/evaluation/phase5_compare_smoke`.
+
+## Current Limits
+
+- This is fixed-initial-condition grasp+lift evaluation only.
+- The current smoke results are not generalized performance claims.
+- UI controls for policy evaluation are not implemented yet.
+- Viewer replay from saved action trajectories is not implemented yet.
+- ManualPolicy is a contract adapter, not a batch evaluation mode.
 
 ## Next Step
 
-Start with the shared `Policy` interface and `RandomPolicy` / `BehaviorCloningPolicy` adapters, then add the headless evaluation runner and JSON/CSV outputs before touching UI integration.
+Add non-blocking Tk UI controls that launch the evaluation runner in a background process, then add trajectory replay in the existing MuJoCo Viewer.

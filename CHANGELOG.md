@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-07-22
+
+- Added Phase 5 shared Policy interface for Random, Manual, Behavior Cloning, and PPO adapters.
+- Added headless `evaluate_policy.py` CLI with fixed 8D action contract, action clipping, JSON/CSV outputs, per-episode metrics, and action trajectory capture.
+- Added `compare_policies.py` CLI for same-seed Random/BC/PPO comparison with JSON, CSV, and Markdown summaries.
+- Added tests for policy adapters, BC/PPO checkpoint loading, seed reproducibility, invalid model paths, evaluation metrics, JSON/CSV saving, comparison aggregation, and unsupported viewer mode.
+- Verified BC and PPO checkpoints through the shared Environment API in short fixed-condition grasp+lift smoke evaluations. UI evaluation controls and Viewer replay remain pending.
+
 ## 0.4.6 - 2026-07-21
 
 - Replaced the self-contained py2app macOS app plan with a local-only `Physical AI Sandbox Launcher.app`.
