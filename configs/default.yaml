@@ -1,0 +1,40 @@
+scene:
+  name: panda_pick_place_phase1
+  timestep: 0.002
+  frame_skip: 10
+  time_limit_seconds: 20.0
+  table:
+    position: [0.55, 0.0, 0.35]
+    size: [0.45, 0.35, 0.035]
+  cube:
+    position: [0.55, 0.0, 0.43]
+    size: 0.025
+    mass: 0.08
+  target:
+    position: [0.42, -0.22, 0.405]
+    radius: 0.08
+  success:
+    stable_seconds: 2.0
+    max_cube_speed: 0.02
+  robot:
+    joint_delta_scale: 0.045
+    home: [-1.1081, 0.3954, 1.0641, -0.4224, 0.6467, 1.1767, -0.7219]
+    gripper_open: 0.04
+    gripper_closed: 0.003
+    grasp_distance: 0.095
+objects:
+  - id: obstacle_box
+    type: box
+    position: [0.62, 0.18, 0.455]
+    size: [0.06, 0.08, 0.05]
+    static: true
+    collision: true
+  - id: obstacle_cylinder
+    type: cylinder
+    position: [0.35, 0.10, 0.46]
+    radius: 0.035
+    height: 0.10
+    static: true
+    collision: true
+logging:
+  root_dir: logs/episodes
