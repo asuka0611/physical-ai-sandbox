@@ -18,6 +18,7 @@ dev = [
 ]
 
 [project.scripts]
+physical-ai-control-panel = "physical_ai_sandbox.cli.control_panel:main"
 physical-ai-validate-config = "physical_ai_sandbox.cli.validate_config:main"
 physical-ai-replay = "physical_ai_sandbox.cli.replay_episode:main"
 physical-ai-bc-rollout = "physical_ai_sandbox.cli.evaluate_bc_rollout:main"

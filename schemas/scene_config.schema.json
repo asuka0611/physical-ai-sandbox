@@ -3,7 +3,11 @@
   "title": "Physical AI Sandbox Scene Config",
   "type": "object",
   "additionalProperties": false,
-  "required": ["scene", "objects", "logging"],
+  "required": [
+    "scene",
+    "objects",
+    "logging"
+  ],
   "properties": {
     "scene": {
       "type": "object",
@@ -20,45 +24,93 @@
         "robot"
       ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "timestep": { "type": "number", "exclusiveMinimum": 0 },
-        "frame_skip": { "type": "integer", "minimum": 1 },
-        "time_limit_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestep": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "frame_skip": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "time_limit_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "table": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["position", "size"],
+          "required": [
+            "position",
+            "size"
+          ],
           "properties": {
-            "position": { "$ref": "#/$defs/vec3" },
-            "size": { "$ref": "#/$defs/positive_vec3" }
+            "position": {
+              "$ref": "#/$defs/vec3"
+            },
+            "size": {
+              "$ref": "#/$defs/positive_vec3"
+            }
           }
         },
         "cube": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["position", "size", "mass"],
+          "required": [
+            "position",
+            "size",
+            "mass"
+          ],
           "properties": {
-            "position": { "$ref": "#/$defs/vec3" },
-            "size": { "type": "number", "exclusiveMinimum": 0 },
-            "mass": { "type": "number", "exclusiveMinimum": 0 }
+            "position": {
+              "$ref": "#/$defs/vec3"
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "mass": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
           }
         },
         "target": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["position", "radius"],
+          "required": [
+            "position",
+            "radius"
+          ],
           "properties": {
-            "position": { "$ref": "#/$defs/vec3" },
-            "radius": { "type": "number", "exclusiveMinimum": 0 }
+            "position": {
+              "$ref": "#/$defs/vec3"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
           }
         },
         "success": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["stable_seconds", "max_cube_speed"],
+          "required": [
+            "stable_seconds",
+            "max_cube_speed"
+          ],
           "properties": {
-            "stable_seconds": { "type": "number", "minimum": 0 },
-            "max_cube_speed": { "type": "number", "exclusiveMinimum": 0 }
+            "stable_seconds": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_cube_speed": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
           }
         },
         "robot": {
@@ -72,30 +124,91 @@
             "grasp_distance"
           ],
           "properties": {
-            "joint_delta_scale": { "type": "number", "exclusiveMinimum": 0 },
+            "joint_delta_scale": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
             "home": {
               "type": "array",
               "minItems": 7,
               "maxItems": 7,
-              "items": { "type": "number" }
+              "items": {
+                "type": "number"
+              }
             },
-            "gripper_open": { "type": "number", "exclusiveMinimum": 0 },
-            "gripper_closed": { "type": "number", "minimum": 0 },
-            "grasp_distance": { "type": "number", "exclusiveMinimum": 0 }
+            "gripper_open": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "gripper_closed": {
+              "type": "number",
+              "minimum": 0
+            },
+            "grasp_distance": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
           }
         }
       }
     },
     "objects": {
       "type": "array",
-      "items": { "$ref": "#/$defs/object" }
+      "items": {
+        "$ref": "#/$defs/object"
+      }
     },
     "logging": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root_dir"],
+      "required": [
+        "root_dir"
+      ],
       "properties": {
-        "root_dir": { "type": "string", "minLength": 1 }
+        "root_dir": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "enum": [
+            "ja",
+            "en"
+          ]
+        },
+        "theme": {
+          "enum": [
+            "dark",
+            "light"
+          ]
+        },
+        "show_control_panel": {
+          "type": "boolean"
+        },
+        "show_status_overlay": {
+          "type": "boolean"
+        }
+      }
+    },
+    "robot_visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "enum": [
+            "modern_lab"
+          ]
+        },
+        "accent_color": {
+          "enum": [
+            "blue"
+          ]
+        }
       }
     }
   },
@@ -104,36 +217,90 @@
       "type": "array",
       "minItems": 3,
       "maxItems": 3,
-      "items": { "type": "number" }
+      "items": {
+        "type": "number"
+      }
     },
     "positive_vec3": {
       "type": "array",
       "minItems": 3,
       "maxItems": 3,
-      "items": { "type": "number", "exclusiveMinimum": 0 }
+      "items": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      }
     },
     "object": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "position", "static", "collision"],
+      "required": [
+        "id",
+        "type",
+        "position",
+        "static",
+        "collision"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_\\-]*$" },
-        "type": { "enum": ["box", "cylinder"] },
-        "position": { "$ref": "#/$defs/vec3" },
-        "size": { "$ref": "#/$defs/positive_vec3" },
-        "radius": { "type": "number", "exclusiveMinimum": 0 },
-        "height": { "type": "number", "exclusiveMinimum": 0 },
-        "static": { "type": "boolean" },
-        "collision": { "type": "boolean" }
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_\\-]*$"
+        },
+        "type": {
+          "enum": [
+            "box",
+            "cylinder"
+          ]
+        },
+        "position": {
+          "$ref": "#/$defs/vec3"
+        },
+        "size": {
+          "$ref": "#/$defs/positive_vec3"
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "static": {
+          "type": "boolean"
+        },
+        "collision": {
+          "type": "boolean"
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "type": { "const": "box" } } },
-          "then": { "required": ["size"] }
+          "if": {
+            "properties": {
+              "type": {
+                "const": "box"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "size"
+            ]
+          }
         },
         {
-          "if": { "properties": { "type": { "const": "cylinder" } } },
-          "then": { "required": ["radius", "height"] }
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cylinder"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "radius",
+              "height"
+            ]
+          }
         }
       ]
     }
