@@ -3,6 +3,7 @@
 .venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -14,9 +15,9 @@ htmlcov/
 .idea/
 
 # Runtime logs and generated training artifacts
-logs/
-datasets/
-models/
+/logs/
+/datasets/
+/models/
 
 # Environment variables / secrets
 .env

@@ -1,4 +1,0 @@
-jsonschema>=4.23
-mujoco>=3.2
-numpy>=1.26
-pyyaml>=6.0

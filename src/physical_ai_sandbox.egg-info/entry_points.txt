@@ -1,8 +1,0 @@
-[console_scripts]
-physical-ai-bc-rollout = physical_ai_sandbox.cli.evaluate_bc_rollout:main
-physical-ai-collect-grasp-lift = physical_ai_sandbox.cli.grasp_lift_demo:main
-physical-ai-compare-ppo = physical_ai_sandbox.cli.compare_ppo:main
-physical-ai-evaluate-ppo = physical_ai_sandbox.cli.evaluate_ppo:main
-physical-ai-replay = physical_ai_sandbox.cli.replay_episode:main
-physical-ai-train-ppo = physical_ai_sandbox.cli.train_ppo:main
-physical-ai-validate-config = physical_ai_sandbox.cli.validate_config:main
