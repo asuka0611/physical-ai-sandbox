@@ -1,10 +1,22 @@
-# macOS App Guide JA
+# macOS Launcher Guide JA
 
-## 対応環境
+## 概要
 
-- macOS 14以降
-- Apple Siliconを第一対象
-- Intel Macは未検証
+`Physical AI Sandbox Launcher.app` は配布用アプリではありません。このMac上のローカル開発環境を起動するためのLauncherです。
+
+ダブルクリックすると、Terminalウィンドウを開かずに以下と同等の処理を実行します。
+
+```bash
+cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
+uv run mjpython scripts/run_control_panel.py
+```
+
+## 必要条件
+
+- プロジェクトが `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox` に存在する
+- `uv` がインストール済み
+- `uv sync` が完了済み
+- `uv run mjpython` が利用可能
 
 ## ビルド
 
@@ -13,75 +25,28 @@ bash scripts/clean_macos_build.sh
 bash scripts/build_macos_app.sh
 ```
 
-出力:
+生成物:
 
 ```text
-dist/Physical AI Sandbox.app
+dist/Physical AI Sandbox Launcher.app
 ```
 
 ## 起動
 
-Finderで `dist/Physical AI Sandbox.app` をダブルクリックするか、以下を実行します。
-
 ```bash
-open "dist/Physical AI Sandbox.app"
+open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-または:
-
-```bash
-bash scripts/run_bundled_app.sh
-```
-
-## 初回起動
-
-初回起動時に以下の場所を作成します。
-
-```text
-~/Library/Application Support/Physical AI Sandbox/
-```
-
-作成される主なディレクトリ:
-
-- `configs/`
-- `logs/`
-- `datasets/`
-- `models/`
-- `replays/`
-- `crash-reports/`
-
-`configs/default.yaml` が存在しない場合、アプリ内のdefault configからコピーします。
-
-## 設定ファイル
-
-設定ファイルの優先順:
-
-1. CLIで指定されたconfig
-2. Application Support内の `configs/default.yaml`
-3. app bundle内の `configs/default.yaml`
+初回起動時、macOSがプロジェクトフォルダへのアクセス許可を求める場合があります。その場合は `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox` を選択してください。
 
 ## ログ
 
-アプリ実行時のログとEpisode記録はApplication Support配下に保存されます。クラッシュログは以下です。
-
 ```text
-~/Library/Application Support/Physical AI Sandbox/crash-reports/
+~/Library/Logs/Physical AI Sandbox Launcher/
 ```
 
-## macOSセキュリティ警告
+起動失敗時は日本語ダイアログにエラー内容とログパスを表示します。
 
-Phase 4.6ではAd Hoc署名のみです。初回起動時にGatekeeper警告が出る可能性があります。
+## 注意
 
-配布段階ではDeveloper ID Application署名、Hardened Runtime、notarization、staplingが必要です。
-
-## アンインストール
-
-アプリ本体を削除し、必要に応じて以下も削除します。
-
-```text
-~/Library/Application Support/Physical AI Sandbox/
-```
-
-## MuJoCo制約
-
-macOSのMuJoCo Viewerは通常`mjpython`相当のtrampolineが必要です。Phase 4.6の配布用`.app`ではLaunchServices経由の子アプリ実行による署名問題を避けるため、バンドル起動時は同一プロセスでcontrol panel/runtimeを実行します。開発環境の起動スクリプトでは引き続き`mjpython`を優先します。
+このLauncherはPython、MuJoCo、依存関係、Dataset、Checkpointを同梱しません。Developer ID署名、notarization、Intel対応、配布用パッケージングは対象外です。

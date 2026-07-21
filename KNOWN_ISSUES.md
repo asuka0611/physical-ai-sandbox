@@ -55,7 +55,9 @@
 
 ## Phase 4.6
 
-- The macOS app bundle is configured for Apple Silicon and macOS 14+. Intel Mac support is not verified.
-- Phase 4.6 uses Ad Hoc signing only. Developer ID signing, Hardened Runtime, notarization, and stapling are not complete, so Gatekeeper may warn on first launch.
-- The app bundle depends on py2app collecting MuJoCo native runtime files. If py2app misses those resources, Viewer startup will fail and write a crash report.
-- `open` launch, direct executable launch, shutdown, signing, and resource checks were smoke-tested locally. Full human Pick-and-Place operation from Finder/Dock/Launchpad still needs a desktop manual pass.
+- `Physical AI Sandbox Launcher.app` is local-only. It is not self-contained and is not suitable for distribution to another Mac.
+- The project path is fixed to `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`; moving the checkout requires updating `packaging/macos/LocalLauncher.swift` and rebuilding.
+- The local environment must already have `uv sync` completed and `uv run mjpython` working.
+- Because the project lives under `~/Documents`, the first launch may require selecting the project folder in the macOS folder access dialog.
+- MuJoCo Viewer visual confirmation from the Launcher requires completing that first-launch folder access step. Automated tests cover packaging and launcher code paths, not human visual inspection of the Viewer window.
+- Developer ID signing, notarization, bundled Python/MuJoCo, Intel support, and public distribution packaging are intentionally out of scope for this local Launcher.

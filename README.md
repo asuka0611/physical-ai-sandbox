@@ -438,9 +438,9 @@ from the BC-only baseline, and these smoke results are not full Pick-and-Place o
 generalization evidence.
 
 
-## macOS Application Bundle
+## macOS Local Launcher
 
-Build a macOS `.app` bundle:
+Build a local-only macOS launcher app:
 
 ```bash
 bash scripts/clean_macos_build.sh
@@ -450,28 +450,42 @@ bash scripts/build_macos_app.sh
 Output:
 
 ```text
-dist/Physical AI Sandbox.app
+dist/Physical AI Sandbox Launcher.app
 ```
 
-Launch the bundled app:
+Launch it with Finder double-click, or:
 
 ```bash
-open "dist/Physical AI Sandbox.app"
+open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-The bundled app prepares Application Support and runs the control panel/runtime
-in the app process. Development launches still use managed subprocess cleanup,
-but the signed `.app` avoids spawning a second app executable from LaunchServices.
-Writable app data is stored under:
+This Launcher is not a distributable self-contained app. It is only a local
+startup app for this Mac, and it runs the existing development command without
+opening Terminal:
+
+```bash
+cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
+uv run mjpython scripts/run_control_panel.py
+```
+
+Local requirements:
+
+- The project exists at `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
+- `uv` is installed and visible from the login shell PATH.
+- Dependencies have already been installed with `uv sync`.
+- `mjpython` is available through `uv run mjpython`.
+
+On first launch, macOS may require selecting the project folder in a Japanese
+folder access dialog because the project lives under `~/Documents`. Logs are
+stored under:
 
 ```text
-~/Library/Application Support/Physical AI Sandbox/
+~/Library/Logs/Physical AI Sandbox Launcher/
 ```
 
-The first launch copies `configs/default.yaml` into Application Support if it is
-missing. Runtime logs, replays, datasets, models, and crash reports also live
-under that directory. Phase 4.6 uses Ad Hoc signing only; Developer ID signing,
-notarization, and stapling are not complete.
+The Launcher prevents duplicate `run_control_panel.py` processes and reports
+startup failures with a Japanese dialog. It does not bundle Python, MuJoCo,
+datasets, checkpoints, or project dependencies.
 
 Detailed guides:
 

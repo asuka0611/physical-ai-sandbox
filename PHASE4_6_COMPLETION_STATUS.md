@@ -4,108 +4,75 @@ Last verified: 2026-07-21
 
 ## Implemented
 
-- macOS app launcher/runtime modules under `physical_ai_sandbox.app`.
-- LaunchServices-safe bundled startup: the `.app` runs control panel/runtime in-process.
-- Development launcher path still uses managed subprocess startup and terminate/kill cleanup.
-- Application Support path management.
-- First-launch config copy.
-- Config priority: CLI config, Application Support config, bundled default config.
-- Writable directories: `configs`, `logs`, `datasets`, `models`, `replays`, `crash-reports`.
-- Crash report writer with app version, phase, macOS version, architecture, Python version, traceback, argv, and config path with home-path masking.
-- Japanese error dialog fallback.
-- Tkinter menu for app, experiment, view, language, logs, guide, GitHub, and version actions.
-- App version display from package metadata or bundled `pyproject.toml`.
-- py2app packaging setup.
-- Build, clean, and bundled-run scripts.
-- Generated app icon and `.icns` build script.
-- macOS app documentation in Japanese and English.
-- Regression tests for paths, first launch, bundle resource resolution, runtime protocol, process cleanup, shutdown, and packaging hygiene.
+- Replaced the self-contained py2app distribution plan with a local-only macOS startup Launcher.
+- Added `dist/Physical AI Sandbox Launcher.app` build flow using a small Swift/Cocoa launcher.
+- The Launcher runs the existing local development command without opening Terminal:
 
-## Packaging Strategy
+```bash
+cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
+uv run mjpython scripts/run_control_panel.py
+```
 
-Phase 4.6 uses `py2app`.
+- Added project-folder access handling for macOS Documents privacy via `NSOpenPanel`.
+- Added Japanese startup failure dialogs with log file location.
+- Added logs under `~/Library/Logs/Physical AI Sandbox Launcher/` and `latest.log` symlink.
+- Added duplicate-process prevention for `run_control_panel.py`.
+- Added PID recording in `control-panel.pid`.
+- Kept `scripts/run_control_panel.py` and the existing GUI/runtime path unchanged.
+- Removed the adopted packaging path's dependency on py2app, bundled Python, bundled MuJoCo, Developer ID signing, notarization, and Intel packaging.
+- Updated macOS packaging tests for the local Launcher strategy.
 
-The signed `.app` does not spawn a second copy of its own app executable from LaunchServices. Earlier smoke testing found that child-app startup can be killed by macOS with `SIGKILL (Code Signature Invalid)`. The final bundled launcher therefore prepares resources and Application Support, then runs the existing Japanese/English Tkinter control panel and MuJoCo Viewer in the app process. Development launch paths retain managed subprocess cleanup.
-
-## Bundle
-
-Target output:
+## Output
 
 ```text
-dist/Physical AI Sandbox.app
+dist/Physical AI Sandbox Launcher.app
 ```
 
 Bundle Identifier:
 
 ```text
-com.asuka0611.physicalaisandbox
+com.asuka0611.physical-ai-sandbox.launcher
 ```
 
-Minimum macOS:
+## Local Requirements
 
-```text
-14.0
-```
-
-Version:
-
-```text
-0.2.0
-```
-
-Primary architecture:
-
-```text
-Apple Silicon / arm64
-```
+- Project path: `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`
+- `uv` installed and visible from the login shell PATH.
+- `uv sync` already completed.
+- `mjpython` available through `uv run mjpython`.
+- macOS project-folder access granted on first launch if prompted.
 
 ## Verification Results
 
 - `uv sync`: passed.
 - `uv run ruff check .`: passed.
-- `uv run pytest`: passed, 73 tests.
+- `uv run pytest`: passed, 77 tests.
 - `uv run python scripts/validate_config.py`: passed.
-- `uv run python scripts/run_headless.py --steps 1000`: passed; 20 simulated seconds, no crash.
-- `bash scripts/build_macos_app.sh`: passed; generated `dist/Physical AI Sandbox.app`.
-- `test -d "dist/Physical AI Sandbox.app"`: passed.
-- `codesign --verify --deep --strict "dist/Physical AI Sandbox.app"`: passed.
-- `spctl --assess --type execute "dist/Physical AI Sandbox.app"`: rejected as expected for Ad Hoc signing without Developer ID notarization.
-- Bundle scan for the repository owner home path under `dist/Physical AI Sandbox.app/Contents`: passed, no hardcoded user path found.
-- Direct executable `--help` smoke: passed.
-- Direct executable runtime smoke with `--role runtime --no-viewer`: launched and stayed alive until terminated.
-- Direct executable launcher smoke: launched and stayed alive until terminated.
-- `open -n "dist/Physical AI Sandbox.app"` smoke: launched one app process and left no process after SIGTERM.
-- App crash-report directory after final smoke: empty.
-- App-related process scan after final smoke: no remaining process.
+- `uv run python scripts/run_headless.py --steps 1000`: passed.
+- `bash scripts/clean_macos_build.sh`: passed.
+- `bash scripts/build_macos_app.sh`: passed; generated `dist/Physical AI Sandbox Launcher.app`.
+- Direct `open -n "dist/Physical AI Sandbox Launcher.app"`: reached the local Launcher startup flow and opened the macOS project-folder access flow.
+- Terminal window check: no new Terminal window was opened; the pre-existing Terminal process was unchanged.
+- Failure dialog path: observed Japanese startup error dialogs during earlier AppleScript/TCC failure tests.
+- Log path: verified `~/Library/Logs/Physical AI Sandbox Launcher/latest.log` creation.
 
-## GUI Manual Check
+## Manual GUI Check Status
 
-Automated smoke confirmed `.app` startup, `open` startup, resource loading, crash-report absence, and shutdown cleanup. A full human desktop pass is still recommended for:
+A full MuJoCo Viewer visual confirmation is still blocked until the first-launch macOS folder access panel is accepted by the user for the project under `~/Documents`.
 
-- Finder double-click launch.
-- Dock/Launchpad launch.
-- Japanese UI rendering.
-- English switching.
-- Viewer camera interaction.
-- Manual robot operation.
-- Recording start/stop from the GUI.
-- Full Pick-and-Place visual behavior.
+Required manual pass after accepting the folder access panel:
 
-## Signing
+- Operation panel is visible.
+- MuJoCo 3D Viewer is visible in a separate window.
+- Robot, table, and cube are visible.
+- Terminal window is not opened by the Launcher.
+- Launching twice does not create duplicate `run_control_panel.py` processes.
+- Closing the GUI leaves no unnecessary Launcher or Control Panel process.
+- Logs are saved under `~/Library/Logs/Physical AI Sandbox Launcher/`.
 
-Phase 4.6 uses Ad Hoc signing only:
+## Non-Goals
 
-```bash
-codesign --force --deep --sign - "dist/Physical AI Sandbox.app"
-```
-
-Developer ID signing, Hardened Runtime, notarization, and stapling are not completed.
-
-## Known Constraints
-
-- Apple Silicon is the primary build target.
-- Intel Mac support is not verified.
-- Gatekeeper rejection is expected until Developer ID signing and notarization are added.
-- The bundle depends on py2app collecting MuJoCo native runtime resources.
-- py2app currently collects some optional/test modules, so bundle size is not optimized.
-- Full human GUI Pick-and-Place validation remains separate from this packaging smoke pass.
+- This is not a distributable app.
+- Python, MuJoCo, datasets, checkpoints, and dependencies are not bundled.
+- Developer ID signing, notarization, Hardened Runtime, and Intel support are not part of this local Launcher.
+- The newer IPC-based app architecture is not used in this phase.

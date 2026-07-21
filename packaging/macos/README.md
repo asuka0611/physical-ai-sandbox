@@ -1,15 +1,19 @@
-# macOS Packaging
+# macOS Local Launcher Packaging
 
-## Strategy
+Phase 4.6 builds a local-only startup app:
 
-Phase 4.6 uses `py2app` to build `dist/Physical AI Sandbox.app`.
+```text
+dist/Physical AI Sandbox Launcher.app
+```
 
-The app uses a two-process design:
+This is not a self-contained or distributable macOS application. It is a small
+Swift/Cocoa launcher for this Mac that starts the existing local development
+control panel command without opening Terminal:
 
-- Launcher process: prepares Application Support, resolves config/resource paths, starts the runtime child, and terminates the child on exit.
-- Runtime process: launches the Tkinter Japanese/English control panel and MuJoCo Viewer.
-
-The launcher does not call `mujoco.viewer.launch_passive` directly. The runtime child is started through a bundle-local `Resources/bin/mjpython` wrapper that locates MuJoCo's native `MuJoCo_(mjpython).app/Contents/MacOS/mjpython` trampoline inside the bundled Python resources.
+```bash
+cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
+uv run mjpython scripts/run_control_panel.py
+```
 
 ## Build
 
@@ -18,32 +22,40 @@ bash scripts/clean_macos_build.sh
 bash scripts/build_macos_app.sh
 ```
 
-Output:
+## Launch
 
-```text
-dist/Physical AI Sandbox.app
+```bash
+open -n "dist/Physical AI Sandbox Launcher.app"
 ```
+
+On first launch, macOS may ask for access to the project folder under
+`~/Documents`. Select `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
+
+## Local Requirements
+
+- The project exists at `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
+- `uv` is installed and visible from the login shell PATH.
+- `uv sync` has already been run.
+- `uv run mjpython` works in the project checkout.
 
 ## Included Resources
 
-- `physical_ai_sandbox` package
-- MuJoCo and native runtime libraries as collected by py2app
-- Tkinter dependencies as available from the build Python
-- `configs/default.yaml`
-- `schemas/scene_config.schema.json`
-- UI and macOS app guides
-- App icon
+- Swift launcher executable.
+- App icon when available.
+- Info.plist metadata.
 
-## Excluded Data
+The app does not include Python, MuJoCo, dependencies, datasets, model
+checkpoints, logs, or project source files.
 
-The build scripts do not copy real datasets, model checkpoints, logs, `.git`, tests, cache directories, or local secrets into the bundle.
+## Logs
 
-## Signing
-
-The build script performs ad hoc signing:
-
-```bash
-codesign --force --deep --sign - "dist/Physical AI Sandbox.app"
+```text
+~/Library/Logs/Physical AI Sandbox Launcher/
 ```
 
-Developer ID signing, Hardened Runtime, notarization, and stapling are not completed in Phase 4.6.
+`latest.log` points to the most recent launch log.
+
+## Distribution
+
+Developer ID signing, notarization, py2app, bundled runtimes, and Intel support
+are intentionally not used for this local Launcher.

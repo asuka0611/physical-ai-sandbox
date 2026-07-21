@@ -2,88 +2,62 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_PATH="$ROOT_DIR/dist/Physical AI Sandbox.app"
-RESOURCES_DIR="$APP_PATH/Contents/Resources"
-MACOS_DIR="$APP_PATH/Contents/MacOS"
+APP_PATH="$ROOT_DIR/dist/Physical AI Sandbox Launcher.app"
+SWIFT_SOURCE="$ROOT_DIR/packaging/macos/LocalLauncher.swift"
+ICON_PATH="$ROOT_DIR/assets/app-icon/PhysicalAISandbox.icns"
+EXECUTABLE_PATH="$APP_PATH/Contents/MacOS/PhysicalAISandboxLauncher"
 
 cd "$ROOT_DIR"
 
-uv run python scripts/generate_app_icon.py
-(cd packaging/macos && uv run --with py2app --with "setuptools<72" python setup.py py2app --dist-dir "$ROOT_DIR/dist" --bdist-base "$ROOT_DIR/build")
-
-mkdir -p "$RESOURCES_DIR/bin"
-cat > "$RESOURCES_DIR/bin/mjpython" <<'EOF'
-#!/bin/sh
-set -eu
-
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-RESOURCES_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-APP_ROOT="$(CDPATH= cd -- "$RESOURCES_DIR/.." && pwd)"
-APP_EXE="$APP_ROOT/MacOS/Physical AI Sandbox"
-
-MJPYTHON_NATIVE="$(find "$RESOURCES_DIR" -path '*/MuJoCo_(mjpython).app/Contents/MacOS/mjpython' -type f -perm -111 2>/dev/null | head -n 1 || true)"
-if [ -z "$MJPYTHON_NATIVE" ]; then
-  MJPYTHON_NATIVE="$(find "$RESOURCES_DIR" -path '*/MuJoCo_(mjpython).app/Contents/MacOS/mjpython' -type f 2>/dev/null | head -n 1 || true)"
-fi
-if [ -z "$MJPYTHON_NATIVE" ]; then
-  echo "MuJoCo mjpython runtime was not found in the app bundle." >&2
-  exit 127
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo "swiftc was not found. This launcher can only be built on macOS with Xcode Command Line Tools." >&2
+  exit 1
 fi
 
-export MJPYTHON_BIN="$MJPYTHON_NATIVE"
-export MJPYTHON_LIBPYTHON="$APP_EXE"
-exec "$MJPYTHON_NATIVE" "$APP_EXE" "$@"
-EOF
-chmod +x "$RESOURCES_DIR/bin/mjpython"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
+rm -rf "$APP_PATH"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
-cp packaging/macos/app_runtime.py "$RESOURCES_DIR/app_runtime.py"
+swiftc "$SWIFT_SOURCE" -o "$EXECUTABLE_PATH" -framework Cocoa
+chmod +x "$EXECUTABLE_PATH"
 
-PYTHON_BASE_PREFIX="$(uv run python -c 'import sys; print(sys.base_prefix)')"
-PYTHON_BASE_LIB="$PYTHON_BASE_PREFIX/lib"
-mkdir -p "$RESOURCES_DIR/lib"
-for tk_lib in libtcl9.0.dylib libtcl9tk9.0.dylib; do
-  if [ -f "$PYTHON_BASE_LIB/$tk_lib" ]; then
-    cp "$PYTHON_BASE_LIB/$tk_lib" "$RESOURCES_DIR/lib/$tk_lib"
-  fi
-done
-for tk_dir in tcl9 tcl9.0 tk9.0; do
-  if [ -d "$PYTHON_BASE_LIB/$tk_dir" ]; then
-    rm -rf "$RESOURCES_DIR/lib/$tk_dir"
-    cp -R "$PYTHON_BASE_LIB/$tk_dir" "$RESOURCES_DIR/lib/$tk_dir"
-  fi
-done
-
-MUJOCO_RESOURCE_DIR="$RESOURCES_DIR/lib/python3.12/mujoco"
-if [ -d "$MUJOCO_RESOURCE_DIR" ] && command -v install_name_tool >/dev/null 2>&1; then
-  while IFS= read -r binary_path; do
-    case "$binary_path" in
-      "$MUJOCO_RESOURCE_DIR"/plugin/*)
-        mujoco_loader_path="@loader_path/../libmujoco.3.10.0.dylib"
-        ;;
-      *)
-        mujoco_loader_path="@loader_path/libmujoco.3.10.0.dylib"
-        ;;
-    esac
-    install_name_tool \
-      -change "@rpath/mujoco.framework/Versions/A/libmujoco.3.10.0.dylib" \
-      "$mujoco_loader_path" \
-      "$binary_path" 2>/dev/null || true
-    install_name_tool \
-      -change "@rpath/libmujoco.3.10.0.dylib" \
-      "$mujoco_loader_path" \
-      "$binary_path" 2>/dev/null || true
-  done < <(find "$MUJOCO_RESOURCE_DIR" \
-    \( -name "*.dylib" -o -name "*.so" \) \
-    -type f)
+if [ -f "$ICON_PATH" ]; then
+  cp "$ICON_PATH" "$APP_PATH/Contents/Resources/PhysicalAISandbox.icns"
 fi
 
-if command -v plutil >/dev/null 2>&1; then
-  plutil -remove PythonInfoDict.PythonExecutable "$APP_PATH/Contents/Info.plist" 2>/dev/null || true
-fi
+cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>ja</string>
+  <key>CFBundleDisplayName</key>
+  <string>Physical AI Sandbox Launcher</string>
+  <key>CFBundleExecutable</key>
+  <string>PhysicalAISandboxLauncher</string>
+  <key>CFBundleIconFile</key>
+  <string>PhysicalAISandbox.icns</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.asuka0611.physical-ai-sandbox.launcher</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Physical AI Sandbox Launcher</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.4.6</string>
+  <key>CFBundleVersion</key>
+  <string>0.4.6</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Physical AI Sandbox Launcher needs access to the local project folder in Documents.</string>
+</dict>
+</plist>
+PLIST
 
-if command -v codesign >/dev/null 2>&1; then
-  codesign --force --deep --sign - "$APP_PATH"
-fi
-
-test -d "$APP_PATH"
+plutil -lint "$APP_PATH/Contents/Info.plist" >/dev/null
+test -x "$EXECUTABLE_PATH"
 echo "$APP_PATH"

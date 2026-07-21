@@ -1,10 +1,22 @@
-# macOS App Guide EN
+# macOS Launcher Guide EN
 
-## Supported Environment
+## Overview
 
-- macOS 14 or later
-- Apple Silicon is the primary target
-- Intel Macs are not yet verified
+`Physical AI Sandbox Launcher.app` is not a distributable application. It is a local-only launcher for this Mac's development checkout.
+
+Double-clicking it runs the equivalent of the following command without opening a Terminal window:
+
+```bash
+cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
+uv run mjpython scripts/run_control_panel.py
+```
+
+## Requirements
+
+- The project exists at `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
+- `uv` is installed.
+- `uv sync` has already completed.
+- `uv run mjpython` is available.
 
 ## Build
 
@@ -16,72 +28,25 @@ bash scripts/build_macos_app.sh
 Output:
 
 ```text
-dist/Physical AI Sandbox.app
+dist/Physical AI Sandbox Launcher.app
 ```
 
 ## Launch
 
-Double-click `dist/Physical AI Sandbox.app` in Finder, or run:
-
 ```bash
-open "dist/Physical AI Sandbox.app"
+open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-Or:
-
-```bash
-bash scripts/run_bundled_app.sh
-```
-
-## First Launch
-
-The app creates:
-
-```text
-~/Library/Application Support/Physical AI Sandbox/
-```
-
-Main subdirectories:
-
-- `configs/`
-- `logs/`
-- `datasets/`
-- `models/`
-- `replays/`
-- `crash-reports/`
-
-If `configs/default.yaml` does not exist, the bundled default config is copied there.
-
-## Config
-
-Config resolution order:
-
-1. CLI-provided config
-2. `configs/default.yaml` in Application Support
-3. Bundled `configs/default.yaml`
+On first launch, macOS may ask for project-folder access. Select `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
 
 ## Logs
 
-Runtime logs and recorded Episodes are stored under Application Support. Crash reports are stored in:
-
 ```text
-~/Library/Application Support/Physical AI Sandbox/crash-reports/
+~/Library/Logs/Physical AI Sandbox Launcher/
 ```
 
-## macOS Security Warning
+Startup failures are shown in a Japanese dialog with the log path.
 
-Phase 4.6 uses ad hoc signing only. Gatekeeper may show a warning on first launch.
+## Notes
 
-Developer ID Application signing, Hardened Runtime, notarization, and stapling are required for public distribution.
-
-## Uninstall
-
-Remove the app bundle and optionally remove:
-
-```text
-~/Library/Application Support/Physical AI Sandbox/
-```
-
-## MuJoCo Constraint
-
-MuJoCo Viewer on macOS normally requires the `mjpython` trampoline. For the distributable `.app`, Phase 4.6 runs the control panel/runtime in the app process to avoid LaunchServices child-app code-signing failures. Development launch scripts still prefer `mjpython` when available.
+The Launcher does not bundle Python, MuJoCo, dependencies, datasets, or checkpoints. Developer ID signing, notarization, Intel support, and distributable packaging are out of scope.
