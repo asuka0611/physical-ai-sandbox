@@ -87,6 +87,8 @@ def build_panda_pick_place_mjcf(config: dict[str, Any]) -> str:
     <material name="obstacle_mat" rgba="0.85 0.18 0.16 1"/>
     <material name="robot_shell_mat" rgba="0.92 0.91 0.86 1" specular="0.38" shininess="0.55"/>
     <material name="joint_mat" rgba="0.12 0.13 0.15 1" specular="0.25"/>
+    <material name="motor_housing_mat" rgba="0.05 0.20 0.55 1" specular="0.35" shininess="0.45"/>
+    <material name="selected_joint_mat" rgba="1.0 0.78 0.12 1" emission="0.06"/>
     <material name="accent_blue_mat" rgba="0.10 0.38 0.95 1" emission="0.02"/>
     <material name="gripper_mat" rgba="0.08 0.09 0.11 1"/>
     <material name="cable_mat" rgba="0.03 0.04 0.05 1"/>
@@ -126,6 +128,9 @@ def build_panda_pick_place_mjcf(config: dict[str, Any]) -> str:
             pos="0 0 0.047" material="accent_blue_mat"{visual_attrs}/>
       <body name="panda_link1" pos="0 0 0.05">
         <joint name="panda_joint1" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+        <site name="joint1_label_site" pos="0.072 0 0.035" size="0.012" rgba="1.0 0.78 0.12 1"/>
+        <geom name="joint1_motor_housing_geom" type="cylinder" size="0.070 0.018"
+              pos="0 0 0.035" material="motor_housing_mat"{visual_attrs}/>
         <geom class="arm" fromto="0 0 0 0 0 0.16"/>
         <geom name="link1_cover_geom" type="capsule" fromto="0 0 0.012 0 0 0.15"
               size="0.047" material="robot_shell_mat"{visual_attrs}/>
@@ -133,6 +138,10 @@ def build_panda_pick_place_mjcf(config: dict[str, Any]) -> str:
               pos="0 0 0.02" material="joint_mat"{visual_attrs}/>
         <body name="panda_link2" pos="0 0 0.16">
           <joint name="panda_joint2" type="hinge" axis="0 1 0" range="-1.7628 1.7628"/>
+          <site name="joint2_label_site" pos="0.050 0.052 0.040"
+                size="0.012" rgba="1.0 0.78 0.12 1"/>
+          <geom name="joint2_motor_housing_geom" type="cylinder" size="0.058 0.014"
+                pos="0.025 0 0.025" material="motor_housing_mat"{visual_attrs}/>
           <geom class="arm" fromto="0 0 0 0.10 0 0.12"/>
           <geom name="link2_cover_geom" type="capsule" fromto="0.008 0 0.008 0.092 0 0.112"
                 size="0.045" material="robot_shell_mat"{visual_attrs}/>
@@ -140,11 +149,19 @@ def build_panda_pick_place_mjcf(config: dict[str, Any]) -> str:
                 pos="0.012 0 0.012" material="accent_blue_mat"{visual_attrs}/>
           <body name="panda_link3" pos="0.10 0 0.12">
             <joint name="panda_joint3" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+            <site name="joint3_label_site" pos="0.055 0.050 0.020"
+                size="0.012" rgba="1.0 0.78 0.12 1"/>
+            <geom name="joint3_motor_housing_geom" type="cylinder" size="0.055 0.014"
+                  pos="0.040 0 0" material="motor_housing_mat"{visual_attrs}/>
             <geom class="arm" fromto="0 0 0 0.12 0 0"/>
             <geom name="link3_cover_geom" type="capsule" fromto="0.01 0 0 0.11 0 0"
                   size="0.043" material="robot_shell_mat"{visual_attrs}/>
             <body name="panda_link4" pos="0.12 0 0">
               <joint name="panda_joint4" type="hinge" axis="0 1 0" range="-3.0718 -0.0698"/>
+              <site name="joint4_label_site" pos="0.052 0.050 -0.035"
+                size="0.012" rgba="1.0 0.78 0.12 1"/>
+              <geom name="joint4_motor_housing_geom" type="cylinder" size="0.052 0.013"
+                    pos="0.030 0 -0.030" material="motor_housing_mat"{visual_attrs}/>
               <geom class="arm" fromto="0 0 0 0.10 0 -0.10"/>
               <geom name="link4_cover_geom" type="capsule" fromto="0.008 0 -0.008 0.092 0 -0.092"
                     size="0.041" material="robot_shell_mat"{visual_attrs}/>
@@ -153,16 +170,28 @@ def build_panda_pick_place_mjcf(config: dict[str, Any]) -> str:
                     size="0.0045" material="cable_mat"{visual_attrs}/>
               <body name="panda_link5" pos="0.10 0 -0.10">
                 <joint name="panda_joint5" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+                <site name="joint5_label_site" pos="0.055 0.047 0.018"
+                size="0.011" rgba="1.0 0.78 0.12 1"/>
+                <geom name="joint5_motor_housing_geom" type="cylinder" size="0.049 0.012"
+                      pos="0.035 0 0" material="motor_housing_mat"{visual_attrs}/>
                 <geom class="arm" fromto="0 0 0 0.12 0 0"/>
                 <geom name="link5_cover_geom" type="capsule" fromto="0.01 0 0 0.11 0 0"
                       size="0.039" material="robot_shell_mat"{visual_attrs}/>
                 <body name="panda_link6" pos="0.12 0 0">
                   <joint name="panda_joint6" type="hinge" axis="0 1 0" range="-0.0175 3.7525"/>
+                  <site name="joint6_label_site" pos="0.050 0.045 0.018"
+                size="0.011" rgba="1.0 0.78 0.12 1"/>
+                  <geom name="joint6_motor_housing_geom" type="cylinder" size="0.046 0.011"
+                        pos="0.032 0 0" material="motor_housing_mat"{visual_attrs}/>
                   <geom class="arm" fromto="0 0 0 0.10 0 0"/>
                   <geom name="link6_cover_geom" type="capsule" fromto="0.008 0 0 0.092 0 0"
                         size="0.037" material="robot_shell_mat"{visual_attrs}/>
                   <body name="panda_link7" pos="0.10 0 0">
                     <joint name="panda_joint7" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+                    <site name="joint7_label_site" pos="0.042 0.040 0.014"
+                size="0.010" rgba="1.0 0.78 0.12 1"/>
+                    <geom name="joint7_motor_housing_geom" type="cylinder" size="0.041 0.010"
+                          pos="0.026 0 0" material="motor_housing_mat"{visual_attrs}/>
                     <geom class="arm" fromto="0 0 0 0.06 0 0"/>
                     <geom name="link7_cover_geom" type="capsule" fromto="0.006 0 0 0.054 0 0"
                           size="0.034" material="robot_shell_mat"{visual_attrs}/>

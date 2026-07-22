@@ -50,5 +50,23 @@
 
 - The new control panel uses Tkinter to keep dependencies minimal. Visual style is functional rather than a full custom design system.
 - XYZ controls are manual action presets mapped onto the existing fixed 8D joint-delta Action contract. They are not inverse kinematics and should not be interpreted as precise Cartesian control.
-- GUI verification still depends on local macOS windowing and `mjpython`. Automated tests cover UI state, command mapping, config compatibility, and MJCF physics-safe visual settings; true manual Viewer checks should be run from the user's Terminal.
+- GUI verification still depends on local macOS windowing and `mjpython`. Automated tests cover UI state, command mapping, embedded Viewport frame IPC, config compatibility, and MJCF physics-safe visual settings; true manual Viewport checks should be run on the user's Mac.
 - The robot is still a lightweight generated Panda-style model, now with visual covers. It does not use official Franka meshes.
+
+## Phase 4.6
+
+- `Physical AI Sandbox Launcher.app` is local-only. It is not self-contained and is not suitable for distribution to another Mac.
+- The project path is fixed to `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`; moving the checkout requires updating `packaging/macos/LocalLauncher.swift` and rebuilding.
+- The local environment must already have `uv sync` completed and `uv` visible from the login shell PATH.
+- Older Launcher builds may have left a LaunchAgent plist under `~/Library/Application Support/Physical AI Sandbox Launcher/`. The current Launcher bootouts that legacy job best-effort and starts the local UI directly without Terminal.
+- Developer ID signing, notarization, bundled Python/MuJoCo, Intel support, and public distribution packaging are intentionally out of scope for this local Launcher.
+
+## Phase 5 Workspace Remaining Issues
+
+- The ControlPanel path now uses an embedded offscreen-rendered Viewport rather than an external MuJoCo Viewer window.
+- The embedded Viewport is frame-stream based; native MuJoCo Viewer menus are not integrated.
+- Orbit, Pan, Zoom, focus, reset, and preset cameras are custom IPC controls. They cover the main workspace workflow but are not a full replacement for every native MuJoCo Viewer camera shortcut.
+- Joint click selection currently targets projected J1-J7 label overlays, not arbitrary 3D mesh picking.
+- Timeline replay UI is not complete; evaluation JSON stores action trajectories for future replay work.
+- Long-run memory-leak testing still needs an extended manual run; short smoke checks only sample CPU/RSS.
+- Phase 6/7 are simulation/mock scaffolds only, with no real hardware or real camera validation.

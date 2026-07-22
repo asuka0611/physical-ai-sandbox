@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.5.9 - 2026-07-22
+
+- Started Phase 5.1-5.9 workspace implementation with a Dock-style Tk UI, centralized InputManager, restart/recovery controls, embedded 3D Viewport, evaluation tab, and Timeline placeholder.
+- Replaced the ControlPanel external MuJoCo Viewer window with an offscreen MuJoCo renderer in the `mjpython` simulation process. RGB frames are sent to the Tk workspace and drawn directly inside the central 3D Viewport.
+- Added custom embedded Viewport camera controls: Orbit, Pan, Zoom, double-click focus, Camera Reset, preset views, Camera Gizmo, and camera state persistence.
+- Added Viewport-projected J1-J7 labels, selected-joint highlight, label click selection, and Scene Tree/Viewport/Inspector synchronization.
+- Added resizable workspace panes, Viewport Maximize, Zen Mode, layout reset, and persisted layout/mode/overlay state.
+- Split Manual Test and AI Recording modes so manual inspection does not save episodes and recording shows an explicit REC state.
+- Fixed Manual Test mode so reaching 1000 steps does not end the episode, reset the simulation, save trajectory data, or reinitialize the robot/object. The state now persists until the user presses Reset.
+- Reduced idle rendering load by only streaming unchanged paused frames on camera/layout changes or a low-frequency heartbeat.
+- Added visual-only J1-J7 motor housing geoms and joint label sites while preserving collision, actuator, Observation, and 8D Action contracts.
+- Added Phase 6 MVP robotics interfaces: RobotInterface, SimulationRobot, MockRealRobot, and SafetyLayer.
+- Added Phase 7 MVP perception interfaces: CameraSource, MockCamera, ObjectPerception, and ObservationBuilder.
+- Added tests for input focus, embedded Viewport IPC frame handling, robot safety/interface behavior, perception observation building, joint visual markers, and emergency stop mapping.
+- Documented that full replay UI, real robot connection, and real camera perception remain unvalidated future work.
+
+## 0.5.0 - 2026-07-22
+
+- Added Phase 5 shared Policy interface for Random, Manual, Behavior Cloning, and PPO adapters.
+- Added headless `evaluate_policy.py` CLI with fixed 8D action contract, action clipping, JSON/CSV outputs, per-episode metrics, and action trajectory capture.
+- Added `compare_policies.py` CLI for same-seed Random/BC/PPO comparison with JSON, CSV, and Markdown summaries.
+- Added tests for policy adapters, BC/PPO checkpoint loading, seed reproducibility, invalid model paths, evaluation metrics, JSON/CSV saving, comparison aggregation, and unsupported viewer mode.
+- Verified BC and PPO checkpoints through the shared Environment API in short fixed-condition grasp+lift smoke evaluations. UI evaluation controls and Viewer replay remain pending.
+
+## 0.4.6 - 2026-07-21
+
+- Replaced the self-contained py2app macOS app plan with a local-only `Physical AI Sandbox Launcher.app`.
+- Added a Swift/Cocoa Launcher that starts the local control panel without opening Terminal.
+- Changed the local app startup path to run Tkinter under normal Python and MuJoCo simulation in a separate `mjpython` process.
+- Added `multiprocessing.connection` IPC between the operation panel and simulation process.
+- Added duplicate `run_control_panel.py` prevention, Japanese failure dialogs, Viewer crash reports, and process-group cleanup.
+- Verified Launcher startup, operation panel window, MuJoCo rendering path, keyboard-driven UI updates, duplicate launch prevention, Terminal-free startup, and process cleanup.
+- Updated build/clean/run scripts, packaging tests, macOS guides, and Phase 4.6 status for the local Launcher strategy.
+
 ## 0.4.5 - 2026-07-21
 
 - Added Phase 4.5 Japanese/English UI translation layer with safe fallback behavior.

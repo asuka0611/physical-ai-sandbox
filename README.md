@@ -73,16 +73,16 @@ reinforcement learning.
 
 ## Run Japanese Control Panel
 
-Launch the Tkinter control panel with the MuJoCo Viewer:
+Launch the Tkinter workspace with the integrated MuJoCo 3D Viewport:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
 
 Launch in English:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py --language en
+uv run python scripts/run_control_panel.py --language en
 ```
 
 The package entrypoint is also available:
@@ -91,12 +91,14 @@ The package entrypoint is also available:
 uv run physical-ai-control-panel --language ja
 ```
 
-The control panel keeps MuJoCo simulation on a worker thread and sends UI
-commands through a thread-safe command queue. It displays run state, Episode,
-Step, Reward, Grasped, Lifted, Success, Recording, Controller, and the latest
-manual event. It supports start, pause/resume, reset, quit, recording
-start/stop, gripper open/close, camera reset, XYZ-style movement buttons,
-rotation buttons, direct J1-J7 joint buttons, and a command-size slider.
+The workspace keeps Tkinter in normal Python and runs MuJoCo simulation plus
+offscreen rendering in a separate `mjpython` process. Rendered RGB frames are
+sent back over IPC and displayed directly in the central 3D Viewport, so the
+ControlPanel path does not open a separate MuJoCo Viewer window. It displays run
+state, Episode, Step, Reward, Grasped, Lifted, Success, Recording, Controller,
+and the latest manual event. It supports start, pause/resume, reset, quit,
+recording start/stop, gripper open/close, camera reset, XYZ-style movement
+buttons, rotation buttons, direct J1-J7 joint buttons, and a command-size slider.
 
 Control-panel keyboard bindings:
 
@@ -437,6 +439,95 @@ The initial task remains fixed-initial-condition grasp+lift. PPO can degrade
 from the BC-only baseline, and these smoke results are not full Pick-and-Place or
 generalization evidence.
 
+
+
+## Policy Evaluation
+
+Phase 5 adds a headless policy evaluation foundation for fixed-initial-condition grasp+lift comparisons.
+
+Evaluate one policy:
+
+```bash
+uv run python scripts/evaluate_policy.py \
+  --policy bc \
+  --model models/bc_grasp_lift_v1 \
+  --episodes 20 \
+  --seed 42 \
+  --headless \
+  --max-steps 200 \
+  --output logs/evaluation/bc_seed42.json
+```
+
+Compare policies with the same seed contract:
+
+```bash
+uv run python scripts/compare_policies.py \
+  --policies random,bc,ppo \
+  --bc-model models/bc_grasp_lift_v1 \
+  --ppo-model models/ppo_grasp_lift_bc_smoke \
+  --episodes 10 \
+  --seed 42 \
+  --max-steps 200 \
+  --output-dir logs/evaluation/compare_seed42
+```
+
+Outputs include JSON, CSV, and Markdown summaries. Current results are fixed-condition grasp+lift smoke checks only; UI evaluation controls and Viewer replay are still pending. See `docs/policy_evaluation.md`.
+
+## macOS Local Launcher
+
+Build a local-only macOS launcher app:
+
+```bash
+bash scripts/clean_macos_build.sh
+bash scripts/build_macos_app.sh
+```
+
+Output:
+
+```text
+dist/Physical AI Sandbox Launcher.app
+```
+
+Launch it with Finder double-click, or:
+
+```bash
+open -n "dist/Physical AI Sandbox Launcher.app"
+```
+
+This Launcher is not a distributable self-contained app. It is only a local
+startup app for this Mac, and it runs the existing development command without
+opening Terminal:
+
+```bash
+cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
+uv run python scripts/run_control_panel.py
+```
+
+Local requirements:
+
+- The project exists at `/Users/miyachiasuka/Documents/prog/Physical AI Sandbox`.
+- `uv` is installed and visible from the login shell PATH.
+- Dependencies have already been installed with `uv sync`.
+- `mjpython` is available through `uv run mjpython`.
+
+The Launcher starts the local development command directly from the GUI app
+process, so Terminal is not opened. Logs are stored under:
+
+```text
+~/Library/Logs/Physical AI Sandbox Launcher/
+```
+
+The Launcher prevents duplicate `run_control_panel.py` processes and reports
+startup failures with a Japanese dialog. The Tk workspace runs under normal
+Python, while MuJoCo simulation and embedded Viewport rendering run in a
+separate `mjpython` process. It does not bundle Python, MuJoCo, datasets,
+checkpoints, or project dependencies.
+
+Detailed guides:
+
+- `docs/MACOS_APP_GUIDE_JA.md`
+- `docs/MACOS_APP_GUIDE_EN.md`
+
 ## Current Phase 1 Status
 
 Implemented:
@@ -453,3 +544,35 @@ Implemented:
   stability, and NaN checks.
 
 Known limitations are tracked in `KNOWN_ISSUES.md`. Detailed Phase 1 completion status is in `PHASE1_COMPLETION_STATUS.md`.
+
+## Integrated Workspace MVP
+
+The macOS control panel now starts as a workspace-style UI: toolbar, scene/policy sidebar, embedded 3D Viewport, robot inspector, and bottom Console/Metrics/Evaluation/Timeline tabs. The ControlPanel path does not open a separate MuJoCo Viewer window; the simulation process renders frames offscreen and streams them into the central Viewport.
+
+Key UX changes:
+
+- Text fields no longer dispatch W/A/S/D/Space robot shortcuts while focused.
+- Escape clears text focus instead of quitting the app.
+- Restart Viewer, Restart All, and Emergency Stop controls are available from the toolbar.
+- The embedded Viewport supports left-drag Orbit, Shift-left-drag or middle-drag Pan, mouse-wheel Zoom, double-click Focus/Isometric, Camera Reset, and Front/Right/Top/Back/Left/Bottom/Isometric presets.
+- A Viewport camera gizmo is drawn in the upper-right and can switch to Top/Front/Right/Isometric views.
+- J1-J7 are shown in the Robot Inspector, Scene Tree, and Viewport overlay; selecting a joint synchronizes the Tree, overlay, Inspector highlight, and camera focus.
+- Workspace panes are draggable, Viewport Maximize and Zen Mode hide surrounding panels, and layout/camera/mode/overlay state is saved under the local Application Support folder.
+- Manual Test and AI Recording modes are separated. Recording commands are blocked in Manual Test mode and the Viewport displays `REC` only while recording.
+- Manual Test sessions do not auto-end or reset at 1000 steps; the simulation state is preserved until the user presses Reset.
+- Idle rendering is throttled so the paused workspace does not stream unchanged frames continuously.
+
+See `docs/ui_workspace.md`, `docs/robot_visual_language.md`, and `PHASE5_1_TO_5_9_STATUS.md`.
+
+Current Workspace screenshot:
+
+![Physical AI Sandbox Workspace](docs/screenshots/workspace_ui_phase_2026-07-22.png)
+
+## Sim2Real and Perception MVP
+
+Phase 6/7 MVP interfaces are available for future hardware and camera work:
+
+- `physical_ai_sandbox.robotics`: `RobotInterface`, `SimulationRobot`, `MockRealRobot`, and `SafetyLayer`.
+- `physical_ai_sandbox.perception`: `CameraSource`, `MockCamera`, `ObjectPerception`, and `ObservationBuilder`.
+
+These are scaffolds only. No real robot or real camera validation is claimed. See `docs/sim2real_interface.md` and `docs/perception_pipeline.md`.

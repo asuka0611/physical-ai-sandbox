@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+import numpy as np
+
+from physical_ai_sandbox.robotics.types import RobotCommandResult, RobotHealth, RobotState
+
+
+class RobotInterface(Protocol):
+    name: str
+
+    def connect(self) -> None: ...
+
+    def disconnect(self) -> None: ...
+
+    def reset(self, *, seed: int | None = None) -> RobotState: ...
+
+    def get_state(self) -> RobotState: ...
+
+    def send_action(self, action: np.ndarray) -> RobotCommandResult: ...
+
+    def emergency_stop(self, reason: str = "emergency_stop") -> None: ...
+
+    def health(self) -> RobotHealth: ...
+
+    def close(self) -> None: ...
+
+    def metadata(self) -> dict[str, Any]: ...
