@@ -42,7 +42,7 @@ dist/Physical AI Sandbox Launcher.app
 open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-The Launcher starts the local UI through a user LaunchAgent and exits after startup. Duplicate launches detect the existing `run_control_panel.py` process instead of creating another one.
+The Launcher starts the local UI directly from the GUI app process without opening Terminal. Duplicate launches detect the existing `run_control_panel.py` process instead of creating another one.
 
 ## Logs
 

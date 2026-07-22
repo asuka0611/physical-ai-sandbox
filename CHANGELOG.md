@@ -21,7 +21,7 @@
 ## 0.4.6 - 2026-07-21
 
 - Replaced the self-contained py2app macOS app plan with a local-only `Physical AI Sandbox Launcher.app`.
-- Added a Swift/Cocoa Launcher that starts a user LaunchAgent without opening Terminal.
+- Added a Swift/Cocoa Launcher that starts the local control panel without opening Terminal.
 - Changed the local app startup path to run Tkinter under normal Python and MuJoCo simulation in a separate `mjpython` process.
 - Added `multiprocessing.connection` IPC between the operation panel and simulation process.
 - Added duplicate `run_control_panel.py` prevention, Japanese failure dialogs, Viewer crash reports, and process-group cleanup.

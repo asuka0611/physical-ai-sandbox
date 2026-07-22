@@ -510,9 +510,8 @@ Local requirements:
 - Dependencies have already been installed with `uv sync`.
 - `mjpython` is available through `uv run mjpython`.
 
-The Launcher uses a user LaunchAgent to start the local development command,
-so Terminal is not opened and the short-lived Launcher process exits after
-startup. Logs are stored under:
+The Launcher starts the local development command directly from the GUI app
+process, so Terminal is not opened. Logs are stored under:
 
 ```text
 ~/Library/Logs/Physical AI Sandbox Launcher/

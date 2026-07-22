@@ -69,24 +69,8 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
         }
         let uvPath = try findUV()
         logger.write("uv: \(uvPath)")
-        let plistURL = try writeLaunchAgentPlist(uvPath: uvPath)
-        let domain = "gui/\(getuid())"
-        _ = try? runAndCapture(
-            executable: "/bin/launchctl",
-            arguments: ["bootout", domain, plistURL.path],
-            currentDirectory: URL(fileURLWithPath: "/"),
-            logFailure: false
-        )
-        _ = try runAndCapture(
-            executable: "/bin/launchctl",
-            arguments: ["bootstrap", domain, plistURL.path],
-            currentDirectory: URL(fileURLWithPath: "/")
-        )
-        _ = try runAndCapture(
-            executable: "/bin/launchctl",
-            arguments: ["kickstart", "\(domain)/\(jobLabel)"],
-            currentDirectory: URL(fileURLWithPath: "/")
-        )
+        cleanupLegacyLaunchAgent()
+        try launchControlPanel(uvPath: uvPath)
         guard let pid = waitForControlPanelPID(timeoutSeconds: 10.0) else {
             throw LauncherError.message("Control Panelプロセスを確認できませんでした。ログ: \(logger.logFile.path)")
         }
@@ -106,39 +90,37 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
         return output
     }
 
-    private func writeLaunchAgentPlist(uvPath: String) throws -> URL {
+    private func launchControlPanel(uvPath: String) throws {
+        let command = "cd \(shellQuote(projectPath)) && exec \(shellQuote(uvPath)) run python scripts/run_control_panel.py"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-l", "-c", command]
+        process.currentDirectoryURL = URL(fileURLWithPath: projectPath)
+        let handle = try FileHandle(forWritingTo: logger.logFile)
+        try handle.seekToEnd()
+        process.standardOutput = handle
+        process.standardError = handle
+        try process.run()
+        try? handle.close()
+        logger.write("起動コマンド: cd '\(projectPath)' && uv run python scripts/run_control_panel.py")
+        logger.write("直接起動しました: launcher child PID \(process.processIdentifier)")
+    }
+
+    private func cleanupLegacyLaunchAgent() {
+        let plistURL = legacyLaunchAgentURL()
+        let domain = "gui/\(getuid())"
+        _ = try? runAndCapture(
+            executable: "/bin/launchctl",
+            arguments: ["bootout", domain, plistURL.path],
+            currentDirectory: URL(fileURLWithPath: "/"),
+            logFailure: false
+        )
+    }
+
+    private func legacyLaunchAgentURL() -> URL {
         let supportDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Physical AI Sandbox Launcher", isDirectory: true)
-        try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
-        let plistURL = supportDir.appendingPathComponent("\(jobLabel).plist")
-        let command = "cd \(shellQuote(projectPath)) && exec \(shellQuote(uvPath)) run python scripts/run_control_panel.py"
-        let plist = """
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
-        <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-        <plist version=\"1.0\">
-        <dict>
-          <key>Label</key>
-          <string>\(jobLabel)</string>
-          <key>ProgramArguments</key>
-          <array>
-            <string>/bin/zsh</string>
-            <string>-l</string>
-            <string>-c</string>
-            <string>\(xmlEscape(command))</string>
-          </array>
-          <key>WorkingDirectory</key>
-          <string>\(xmlEscape(projectPath))</string>
-          <key>StandardOutPath</key>
-          <string>\(xmlEscape(logger.logFile.path))</string>
-          <key>StandardErrorPath</key>
-          <string>\(xmlEscape(logger.logFile.path))</string>
-        </dict>
-        </plist>
-        """
-        try plist.write(to: plistURL, atomically: true, encoding: .utf8)
-        logger.write("launch agent: \(plistURL.path)")
-        logger.write("起動コマンド: cd '\(projectPath)' && uv run python scripts/run_control_panel.py")
-        return plistURL
+        return supportDir.appendingPathComponent("\(jobLabel).plist")
     }
 
     private func waitForControlPanelPID(timeoutSeconds: TimeInterval) -> Int? {
@@ -211,15 +193,6 @@ final class LauncherApp: NSObject, NSApplicationDelegate {
 
 private func shellQuote(_ value: String) -> String {
     return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-}
-
-private func xmlEscape(_ value: String) -> String {
-    return value
-        .replacingOccurrences(of: "&", with: "&amp;")
-        .replacingOccurrences(of: "<", with: "&lt;")
-        .replacingOccurrences(of: ">", with: "&gt;")
-        .replacingOccurrences(of: "\"", with: "&quot;")
-        .replacingOccurrences(of: "'", with: "&apos;")
 }
 
 enum LauncherError: LocalizedError {

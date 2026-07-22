@@ -15,8 +15,9 @@ cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
 uv run python scripts/run_control_panel.py
 ```
 
-The operation panel runs under normal Python/Tkinter. The MuJoCo Viewer and
-simulation run in a separate `mjpython` process started by the UI.
+The operation panel runs under normal Python/Tkinter. MuJoCo simulation and
+offscreen Viewport rendering run in a separate `mjpython` process started by the
+UI.
 
 ## Build
 
@@ -31,14 +32,9 @@ bash scripts/build_macos_app.sh
 open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-The Launcher writes a LaunchAgent plist under:
-
-```text
-~/Library/Application Support/Physical AI Sandbox Launcher/
-```
-
-It then bootstraps/kickstarts that LaunchAgent and exits. The LaunchAgent starts
-`uv run python scripts/run_control_panel.py` in the local checkout.
+The Launcher starts `uv run python scripts/run_control_panel.py` directly from
+the GUI app process. It does not open Terminal and it prevents duplicate
+`run_control_panel.py` processes.
 
 ## Local Requirements
 

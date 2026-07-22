@@ -39,7 +39,7 @@ dist/Physical AI Sandbox Launcher.app
 open -n "dist/Physical AI Sandbox Launcher.app"
 ```
 
-LauncherはユーザーLaunchAgentを使ってローカルUIを起動し、Launcher自身は起動後に終了します。二重起動時は既存の `run_control_panel.py` を検出し、新しいプロセスを増やしません。
+LauncherはGUIアプリプロセスからローカルUIを直接起動します。Terminalは開きません。二重起動時は既存の `run_control_panel.py` を検出し、新しいプロセスを増やしません。
 
 ## ログ
 

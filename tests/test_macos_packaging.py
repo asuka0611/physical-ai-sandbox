@@ -24,8 +24,9 @@ def test_local_launcher_runs_existing_control_panel_without_terminal() -> None:
 
     assert "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox" in text
     assert "uv run python scripts/run_control_panel.py" in text
-    assert "launchctl" in text
-    assert "LaunchAgent" in text or "launch agent" in text
+    assert "Process()" in text
+    assert 'process.executableURL = URL(fileURLWithPath: "/bin/zsh")' in text
+    assert "launchControlPanel" in text
     assert "NSAlert" in text
     assert "Terminal" not in text
 
@@ -50,8 +51,7 @@ def test_launcher_prevents_duplicate_control_panel_processes() -> None:
     assert "run_control_panel.py" in text
     assert "既に起動中です" in text
     assert "control-panel.pid" in text
-    assert "bootout" in text
-    assert "bootstrap" in text
+    assert "cleanupLegacyLaunchAgent" in text
 
 
 def test_launcher_app_is_local_only_and_not_self_contained() -> None:

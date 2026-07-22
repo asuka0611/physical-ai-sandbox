@@ -27,7 +27,7 @@ depend on a viewer.
 
 ## Phase 4.6 macOS Launcher Architecture
 
-The local macOS Launcher is not a self-contained application. It starts a user LaunchAgent that runs `uv run python scripts/run_control_panel.py` in the local checkout without opening Terminal. The Tk operation panel stays in a normal Python process. MuJoCo simulation and offscreen rendering run in a separate `mjpython` process via `physical_ai_sandbox.ui.simulation_process`. The two processes exchange command, snapshot, and PPM frame messages over `multiprocessing.connection` on localhost. This avoids the macOS `mjpython` + Tkinter/Tcl-Tk 9 same-process crash and keeps `mujoco.viewer.launch_passive` out of the ControlPanel path.
+The local macOS Launcher is not a self-contained application. It starts `uv run python scripts/run_control_panel.py` directly from the GUI app process without opening Terminal. The Tk operation panel stays in a normal Python process. MuJoCo simulation and offscreen rendering run in a separate `mjpython` process via `physical_ai_sandbox.ui.simulation_process`. The two processes exchange command, snapshot, and PPM frame messages over `multiprocessing.connection` on localhost. This avoids the macOS `mjpython` + Tkinter/Tcl-Tk 9 same-process crash and keeps `mujoco.viewer.launch_passive` out of the ControlPanel path.
 
 ## Phase 5 Policy Evaluation Architecture
 
