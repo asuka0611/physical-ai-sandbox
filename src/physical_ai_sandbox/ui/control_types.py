@@ -38,6 +38,9 @@ class ControlPanelSnapshot:
     language: Language = "ja"
     last_event: str = "ready"
     error_message: str | None = None
+    selected_joint: int | None = None
+    viewer_connected: bool = False
+    input_context: str = "viewport"
 
     def to_message(self) -> dict[str, object]:
         return {"type": "snapshot", **asdict(self)}
@@ -86,7 +89,14 @@ class GuiActionMapper:
             direction = 1.0 if command.name == "joint_positive" else -1.0
             self._pending[index] += direction * self.step_size
             return f"joint {index + 1} {'positive' if direction > 0 else 'negative'}"
+        if command.name == "emergency_stop":
+            self.clear()
+            self.gripper_closed = False
+            return "emergency stop"
         return None
+
+    def clear(self) -> None:
+        self._pending[:] = 0.0
 
     def consume_action(self) -> list[float]:
         action = np.zeros(8, dtype=float)

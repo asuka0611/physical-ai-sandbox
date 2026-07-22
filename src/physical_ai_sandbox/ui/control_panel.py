@@ -22,6 +22,7 @@ from physical_ai_sandbox.paths import DEFAULT_CONFIG_PATH
 from physical_ai_sandbox.scene.config import load_and_validate_config
 from physical_ai_sandbox.ui.control_types import ControlPanelSnapshot, PanelCommand
 from physical_ai_sandbox.ui.i18n import normalize_language, translate
+from physical_ai_sandbox.ui.input_manager import InputManager
 
 
 class ControlCommandQueue:
@@ -84,6 +85,7 @@ class ControlPanelRuntime:
         self._io_thread: Thread | None = None
         self._monitor_thread: Thread | None = None
         self._log_file: Path | None = None
+        self._restart_times: list[float] = []
 
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
@@ -100,6 +102,34 @@ class ControlPanelRuntime:
         self._send_quit()
         self._close_ipc()
         self._terminate_process_tree()
+
+    def restart_viewer(self) -> None:
+        now = time.monotonic()
+        self._restart_times = [item for item in self._restart_times if now - item < 60.0]
+        if len(self._restart_times) >= 3:
+            self.state_store.update(
+                running=False,
+                paused=True,
+                last_event="restart blocked",
+                error_message="60秒以内にViewer再起動が3回失敗しました。ログを確認してください。",
+            )
+            return
+        self._restart_times.append(now)
+        self.stop()
+        self.join(timeout=5.0)
+        self.state_store.update(
+            running=False,
+            paused=True,
+            step=0,
+            error_message=None,
+            last_event="viewer restarting",
+            viewer_connected=False,
+        )
+        self.start()
+
+    def emergency_stop(self) -> None:
+        self.command_queue.put("emergency_stop")
+        self.state_store.update(running=False, paused=True, last_event="emergency stop")
 
     def join(self, timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
@@ -178,7 +208,12 @@ class ControlPanelRuntime:
                 time.sleep(0.02)
         except (EOFError, OSError):
             if not self.stop_event.is_set():
-                self.state_store.update(running=False, paused=True, last_event="viewer stopped")
+                self.state_store.update(
+                    running=False,
+                    paused=True,
+                    last_event="viewer stopped",
+                    viewer_connected=False,
+                )
         except Exception as exc:
             if not self.stop_event.is_set():
                 self._publish_startup_error(exc, traceback.format_exc())
@@ -189,7 +224,7 @@ class ControlPanelRuntime:
             snapshot = ControlPanelSnapshot.from_message(message)
             if snapshot.language != self.language:
                 snapshot = replace(snapshot, language=self.language)
-            self.state_store.replace(snapshot)
+            self.state_store.replace(replace(snapshot, viewer_connected=True))
             return
         if message_type == "error":
             error_message = str(message.get("message") or "Viewerを起動できませんでした。")
@@ -201,6 +236,7 @@ class ControlPanelRuntime:
                 max_steps=1,
                 last_event="起動失敗",
                 error_message=f"{error_message}\n\nCrash report: {report_path}",
+                viewer_connected=False,
             )
 
     def _monitor_process(self) -> None:
@@ -219,9 +255,15 @@ class ControlPanelRuntime:
                 error_message=(
                     f"Viewer process exited with status {returncode}. Log: {self._log_file}"
                 ),
+                viewer_connected=False,
             )
         else:
-            self.state_store.update(running=False, paused=True, last_event="viewer closed")
+            self.state_store.update(
+                running=False,
+                paused=True,
+                last_event="viewer closed",
+                viewer_connected=False,
+            )
 
     def _send_quit(self) -> None:
         connection = self._connection
@@ -277,6 +319,7 @@ class ControlPanelRuntime:
             max_steps=1,
             last_event="起動失敗",
             error_message=f"{exc}\n\nCrash report: {report_path}",
+            viewer_connected=False,
         )
 
     def _write_crash_report(self, message: str, traceback_text: str) -> Path:
@@ -300,7 +343,6 @@ class ControlPanelRuntime:
         return path
 
 
-
 class TkControlPanel:
     def __init__(self, runtime: ControlPanelRuntime) -> None:
         import tkinter as tk
@@ -312,14 +354,17 @@ class TkControlPanel:
         self.command_queue = runtime.command_queue
         self.state_store = runtime.state_store
         self.root = tk.Tk()
-        self.root.title("Physical AI Sandbox")
+        self.root.title("Physical AI Sandbox Workspace")
         self.root.configure(bg="#20242a")
+        self.root.minsize(1120, 720)
         self.language_var = tk.StringVar(value=self.state_store.snapshot().language)
         self.step_size_var = tk.DoubleVar(value=0.8)
         self.status_vars: dict[str, Any] = {}
         self.buttons: dict[str, Any] = {}
         self.labels: dict[str, Any] = {}
         self._shown_error_message: str | None = None
+        self.input_manager = InputManager()
+        self._evaluation_process: subprocess.Popen[bytes] | None = None
         self._build()
         self._bind_keys()
         self._refresh()
@@ -408,34 +453,144 @@ class TkControlPanel:
 
     def _build(self) -> None:
         tk = self.tk
-        ttk = self.ttk
-        frame = tk.Frame(self.root, bg="#20242a", padx=16, pady=16)
-        frame.pack(fill="both", expand=True)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(1, weight=1)
 
-        title = tk.Label(
-            frame,
-            text="Physical AI Sandbox",
+        toolbar = tk.Frame(self.root, bg="#171b20", padx=10, pady=8)
+        toolbar.grid(row=0, column=0, sticky="ew")
+        self._build_toolbar(toolbar)
+
+        workspace = tk.PanedWindow(
+            self.root,
+            orient="horizontal",
+            sashwidth=5,
             bg="#20242a",
-            fg="#f4f7fb",
-            font=("Helvetica", 18, "bold"),
+            bd=0,
+            showhandle=False,
         )
-        title.grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 12))
+        workspace.grid(row=1, column=0, sticky="nsew")
 
-        self.labels["language"] = tk.Label(frame, bg="#20242a", fg="#cbd5e1")
-        self.labels["language"].grid(row=1, column=0, sticky="w")
+        left_panel = tk.Frame(workspace, bg="#20242a", padx=12, pady=10, width=260)
+        center_panel = tk.Frame(workspace, bg="#111827", padx=12, pady=10, width=520)
+        right_panel = tk.Frame(workspace, bg="#20242a", padx=12, pady=10, width=300)
+        workspace.add(left_panel, minsize=220)
+        workspace.add(center_panel, minsize=360)
+        workspace.add(right_panel, minsize=260)
+
+        bottom = tk.PanedWindow(
+            self.root,
+            orient="vertical",
+            sashwidth=5,
+            bg="#20242a",
+            bd=0,
+            showhandle=False,
+        )
+        bottom.grid(row=2, column=0, sticky="ew")
+        bottom_panel = tk.Frame(bottom, bg="#171b20", padx=12, pady=8, height=150)
+        bottom.add(bottom_panel, minsize=110)
+
+        self._build_left_sidebar(left_panel)
+        self._build_viewer_panel(center_panel)
+        self._build_inspector(right_panel)
+        self._build_bottom_panel(bottom_panel)
+        self._render_text()
+        self.root.focus_set()
+
+    def _build_toolbar(self, parent: object) -> None:
+        ttk = self.ttk
+        toolbar_commands = [
+            ("start", "start"),
+            ("toggle_pause", "pause"),
+            ("reset", "reset"),
+            ("reset_camera", "reset_camera"),
+            ("restart_viewer", "Restart Viewer"),
+            ("restart_all", "Restart All"),
+            ("emergency_stop", "Emergency Stop"),
+            ("quit", "quit"),
+        ]
+        for index, (command, label_key) in enumerate(toolbar_commands):
+            button = ttk.Button(
+                parent,
+                text=translate(label_key, self.language_var.get()),
+                takefocus=False,
+                command=lambda name=command: self._send(name),
+            )
+            button.grid(row=0, column=index, sticky="ew", padx=3)
+            self.buttons[command] = button
+        parent.grid_columnconfigure(len(toolbar_commands), weight=1)
+        self.labels["language"] = self.tk.Label(parent, bg="#171b20", fg="#cbd5e1")
+        self.labels["language"].grid(row=0, column=len(toolbar_commands), sticky="e", padx=(12, 4))
         language_menu = ttk.OptionMenu(
-            frame,
+            parent,
             self.language_var,
             self.language_var.get(),
             "ja",
             "en",
             command=self._set_language,
         )
-        language_menu.grid(row=1, column=1, sticky="ew", pady=2)
+        language_menu.configure(takefocus=False)
+        language_menu.grid(row=0, column=len(toolbar_commands) + 1, sticky="e")
 
-        status_frame = tk.LabelFrame(frame, bg="#20242a", fg="#f4f7fb", padx=10, pady=8)
-        status_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 12))
-        self.labels["experiment_status"] = status_frame
+    def _build_left_sidebar(self, parent: object) -> None:
+        tk = self.tk
+        ttk = self.ttk
+        tk.Label(
+            parent,
+            text="Project / Scene",
+            bg="#20242a",
+            fg="#f4f7fb",
+            font=("Helvetica", 14, "bold"),
+        ).pack(anchor="w", pady=(0, 8))
+        tree = ttk.Treeview(parent, height=12, show="tree")
+        tree.pack(fill="both", expand=True)
+        root = tree.insert("", "end", text="Scene", open=True)
+        robot = tree.insert(root, "end", text="Robot: Panda", open=True)
+        for index in range(7):
+            tree.insert(robot, "end", text=f"J{index + 1}  Joint {index + 1}")
+        tree.insert(robot, "end", text="Gripper")
+        tree.insert(root, "end", text="Table")
+        tree.insert(root, "end", text="Target Object")
+        tree.insert(root, "end", text="Goal Area")
+
+        policy_frame = tk.LabelFrame(
+            parent, bg="#20242a", fg="#f4f7fb", text="Policy", padx=8, pady=8
+        )
+        policy_frame.pack(fill="x", pady=(12, 0))
+        self.policy_var = tk.StringVar(value="Manual")
+        policy_menu = ttk.OptionMenu(
+            policy_frame, self.policy_var, "Manual", "Manual", "Random", "BC", "PPO"
+        )
+        policy_menu.configure(takefocus=False)
+        policy_menu.pack(fill="x")
+        self.model_path_var = tk.StringVar(value="models/bc_grasp_lift_v1")
+        model_entry = ttk.Entry(policy_frame, textvariable=self.model_path_var)
+        model_entry.pack(fill="x", pady=(6, 0))
+
+    def _build_viewer_panel(self, parent: object) -> None:
+        tk = self.tk
+        ttk = self.ttk
+        tk.Label(
+            parent,
+            text="3D Viewport",
+            bg="#111827",
+            fg="#f8fafc",
+            font=("Helvetica", 16, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            parent,
+            text=(
+                "MuJoCo Viewerは安定性のため別プロセスで表示します。"
+                "位置リセットと前面表示で統合ワークスペースとして扱います。"
+            ),
+            wraplength=500,
+            justify="left",
+            bg="#111827",
+            fg="#94a3b8",
+        ).pack(anchor="w", pady=(4, 10))
+        status_frame = tk.LabelFrame(
+            parent, bg="#111827", fg="#f4f7fb", text="Status", padx=10, pady=8
+        )
+        status_frame.pack(fill="x")
         for index, key in enumerate(
             [
                 "episode",
@@ -447,134 +602,300 @@ class TkControlPanel:
                 "recording",
                 "controller",
                 "last_event",
+                "viewer",
+                "selected_joint",
+                "input_context",
             ],
         ):
-            label = tk.Label(status_frame, bg="#20242a", fg="#94a3b8")
+            label = tk.Label(status_frame, text=key, bg="#111827", fg="#94a3b8")
             label.grid(row=index // 3, column=(index % 3) * 2, sticky="w", padx=(0, 6), pady=2)
             value = tk.StringVar(value="-")
-            value_label = tk.Label(status_frame, textvariable=value, bg="#20242a", fg="#f8fafc")
+            value_label = tk.Label(status_frame, textvariable=value, bg="#111827", fg="#f8fafc")
             value_label.grid(row=index // 3, column=(index % 3) * 2 + 1, sticky="w", padx=(0, 16))
             self.labels[key] = label
             self.status_vars[key] = value
-
-        controls = tk.Frame(frame, bg="#20242a")
-        controls.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(0, 12))
-        for index, command in enumerate(
-            [
-                "start",
-                "toggle_pause",
-                "reset",
-                "toggle_recording",
-                "open_gripper",
-                "close_gripper",
-                "reset_camera",
-                "quit",
-            ],
-        ):
-            button = ttk.Button(
-                controls,
-                command=lambda name=command: self._send(name),
+        action_frame = tk.Frame(parent, bg="#111827")
+        action_frame.pack(fill="x", pady=(12, 0))
+        for index, command in enumerate(["reset_camera", "front_viewer", "viewer_layout"]):
+            text = {"front_viewer": "Viewerを前面へ", "viewer_layout": "Viewer位置リセット"}.get(
+                command,
+                translate(command, self.language_var.get()),
             )
-            button.grid(row=index // 4, column=index % 4, padx=3, pady=3, sticky="ew")
-            self.buttons[command] = button
-
-        move_frame = tk.LabelFrame(frame, bg="#20242a", fg="#f4f7fb", padx=10, pady=8)
-        move_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=(0, 8))
-        self.labels["xyz_control"] = move_frame
-        move_buttons = [
-            ("x_positive", "+X", 0, 1),
-            ("x_negative", "-X", 2, 1),
-            ("y_positive", "+Y", 1, 2),
-            ("y_negative", "-Y", 1, 0),
-            ("z_positive", "+Z", 0, 3),
-            ("z_negative", "-Z", 2, 3),
-            ("rotate_negative", "-R", 0, 4),
-            ("rotate_positive", "+R", 2, 4),
-        ]
-        for command, text, row, column in move_buttons:
             button = ttk.Button(
-                move_frame,
+                action_frame,
                 text=text,
+                takefocus=False,
                 command=lambda name=command: self._send(name),
             )
-            button.grid(row=row, column=column, padx=3, pady=3, sticky="ew")
+            button.grid(row=0, column=index, padx=3, sticky="ew")
             self.buttons[command] = button
 
-        joints_frame = tk.LabelFrame(frame, bg="#20242a", fg="#f4f7fb", padx=10, pady=8)
-        joints_frame.grid(row=4, column=2, columnspan=2, sticky="nsew")
+    def _build_inspector(self, parent: object) -> None:
+        tk = self.tk
+        ttk = self.ttk
+        tk.Label(
+            parent,
+            text="Robot Inspector",
+            bg="#20242a",
+            fg="#f4f7fb",
+            font=("Helvetica", 14, "bold"),
+        ).pack(anchor="w", pady=(0, 8))
+        joints_frame = tk.LabelFrame(parent, bg="#20242a", fg="#f4f7fb", padx=10, pady=8)
+        joints_frame.pack(fill="both", expand=True)
         self.labels["joints"] = joints_frame
-        for index in range(7):
-            tk.Label(joints_frame, text=f"J{index + 1}", bg="#20242a", fg="#cbd5e1").grid(
-                row=index,
-                column=0,
-                padx=(0, 5),
-                pady=1,
+        joint_names = [
+            "Base Rotation",
+            "Shoulder",
+            "Upper Arm",
+            "Elbow",
+            "Wrist 1",
+            "Wrist 2",
+            "Wrist 3",
+        ]
+        for index, joint_name in enumerate(joint_names):
+            row = tk.Frame(joints_frame, bg="#20242a")
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"J{index + 1}", width=3, bg="#20242a", fg="#38bdf8").pack(
+                side="left"
+            )
+            tk.Label(row, text=joint_name, width=14, anchor="w", bg="#20242a", fg="#cbd5e1").pack(
+                side="left"
             )
             ttk.Button(
-                joints_frame,
+                row,
                 text="-",
                 width=3,
+                takefocus=False,
                 command=lambda joint=index: self._send("joint_negative", joint),
-            ).grid(row=index, column=1, padx=2, pady=1)
+            ).pack(side="left", padx=2)
             ttk.Button(
-                joints_frame,
+                row,
                 text="+",
                 width=3,
+                takefocus=False,
                 command=lambda joint=index: self._send("joint_positive", joint),
-            ).grid(row=index, column=2, padx=2, pady=1)
+            ).pack(side="left", padx=2)
+            ttk.Button(
+                row,
+                text="Focus",
+                width=6,
+                takefocus=False,
+                command=lambda joint=index: self._send("select_joint", joint),
+            ).pack(side="left", padx=2)
 
-        self.labels["step_size"] = tk.Label(frame, bg="#20242a", fg="#cbd5e1")
-        self.labels["step_size"].grid(row=5, column=0, sticky="w", pady=(10, 0))
+        self.labels["step_size"] = tk.Label(parent, bg="#20242a", fg="#cbd5e1")
+        self.labels["step_size"].pack(anchor="w", pady=(10, 0))
         scale = ttk.Scale(
-            frame,
+            parent,
             variable=self.step_size_var,
             from_=0.1,
             to=1.0,
             command=lambda value: self._send("set_step_size", float(value)),
         )
-        scale.grid(row=5, column=1, columnspan=3, sticky="ew", pady=(10, 0))
+        scale.pack(fill="x", pady=(4, 0))
 
-        help_frame = tk.LabelFrame(frame, bg="#20242a", fg="#f4f7fb", padx=10, pady=8)
-        help_frame.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
-        self.labels["keyboard_help"] = help_frame
+    def _build_bottom_panel(self, parent: object) -> None:
+        tk = self.tk
+        notebook = self.ttk.Notebook(parent)
+        notebook.pack(fill="both", expand=True)
+        console = tk.Frame(notebook, bg="#171b20", padx=8, pady=8)
+        metrics = tk.Frame(notebook, bg="#171b20", padx=8, pady=8)
+        evaluation = tk.Frame(notebook, bg="#171b20", padx=8, pady=8)
+        timeline = tk.Frame(notebook, bg="#171b20", padx=8, pady=8)
+        notebook.add(console, text="Console")
+        notebook.add(metrics, text="Metrics")
+        notebook.add(evaluation, text="Evaluation")
+        notebook.add(timeline, text="Timeline")
+
         self.help_text = tk.StringVar(value="")
         tk.Label(
-            help_frame,
-            textvariable=self.help_text,
-            justify="left",
-            bg="#20242a",
-            fg="#dbeafe",
+            console, textvariable=self.help_text, justify="left", bg="#171b20", fg="#dbeafe"
+        ).pack(anchor="w")
+        tk.Label(
+            metrics,
+            text="Reward / Success / Object height are updated from the simulation snapshot.",
+            bg="#171b20",
+            fg="#cbd5e1",
         ).pack(anchor="w")
 
-        for column in range(4):
-            frame.grid_columnconfigure(column, weight=1)
+        self.eval_episode_var = tk.StringVar(value="3")
+        self.eval_seed_var = tk.StringVar(value="42")
+        self.eval_status_var = tk.StringVar(value="評価待機中")
+        for label, var in [("Episodes", self.eval_episode_var), ("Seed", self.eval_seed_var)]:
+            row = tk.Frame(evaluation, bg="#171b20")
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=label, width=10, anchor="w", bg="#171b20", fg="#94a3b8").pack(
+                side="left"
+            )
+            self.ttk.Entry(row, textvariable=var, width=10).pack(side="left")
+        self.ttk.Button(
+            evaluation, text="評価開始", takefocus=False, command=self._start_evaluation
+        ).pack(side="left", padx=3, pady=6)
+        self.ttk.Button(
+            evaluation, text="評価停止", takefocus=False, command=self._stop_evaluation
+        ).pack(side="left", padx=3, pady=6)
+        tk.Label(evaluation, textvariable=self.eval_status_var, bg="#171b20", fg="#f8fafc").pack(
+            anchor="w", pady=(36, 0)
+        )
 
-        self._render_text()
+        tk.Label(
+            timeline,
+            text=(
+                "Trajectory replay MVP: JSON action trajectory is saved by "
+                "evaluate_policy.py. Viewer playback controls are pending."
+            ),
+            wraplength=760,
+            justify="left",
+            bg="#171b20",
+            fg="#cbd5e1",
+        ).pack(anchor="w")
 
     def _bind_keys(self) -> None:
-        bindings = {
-            "w": "x_positive",
-            "s": "x_negative",
-            "a": "y_negative",
-            "d": "y_positive",
-            "r": "z_positive",
-            "f": "z_negative",
-            "q": "rotate_negative",
-            "e": "rotate_positive",
-            "o": "open_gripper",
-            "c": "close_gripper",
-            "<space>": "toggle_pause",
-            "<Return>": "reset",
-            "<Escape>": "quit",
-        }
-        for key, command in bindings.items():
-            self.root.bind(key, lambda _event, name=command: self._send(name))
+        self.root.bind("<FocusIn>", self._on_focus_in)
+        self.root.bind("<FocusOut>", self._on_focus_out)
+        self.root.bind("<KeyPress>", self._on_key_press)
+        self.root.bind("<KeyRelease>", self._on_key_release)
+
+    def _on_focus_in(self, event: object) -> None:
+        widget = getattr(event, "widget", self.root)
+        self.input_manager.focus_in(widget)
+
+    def _on_focus_out(self, _event: object) -> None:
+        self.input_manager.focus_out()
+
+    def _on_key_press(self, event: object) -> str | None:
+        command = self.input_manager.handle_key_press(event)  # type: ignore[arg-type]
+        if command is None:
+            return None
+        if command == "clear_focus":
+            self.root.focus_set()
+            return "break"
+        self._send(command)
+        return "break"
+
+    def _on_key_release(self, event: object) -> None:
+        self.input_manager.handle_key_release(event)  # type: ignore[arg-type]
 
     def _send(self, name: str, value: str | float | int | None = None) -> None:
         if name == "quit":
             self.close()
             return
+        if name == "restart_viewer":
+            Thread(target=self.runtime.restart_viewer, daemon=True).start()
+            return
+        if name == "restart_all":
+            Thread(target=self.runtime.restart_viewer, daemon=True).start()
+            return
+        if name == "emergency_stop":
+            self.runtime.emergency_stop()
+            return
+        if name == "front_viewer":
+            self._front_viewer()
+            return
+        if name == "viewer_layout":
+            self._reset_viewer_layout()
+            return
         self.command_queue.put(name, value)
+        self.root.focus_set()
+
+    def _start_evaluation(self) -> None:
+        if self._evaluation_process is not None and self._evaluation_process.poll() is None:
+            self.eval_status_var.set("評価は既に実行中です")
+            return
+        policy = self.policy_var.get().strip().lower()
+        if policy == "manual":
+            self.eval_status_var.set("Manualは自動評価対象外です")
+            return
+        output_dir = build_app_paths().logs_dir / "policy_evaluation_ui"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{policy}_{int(time.time())}.json"
+        command = [
+            sys.executable,
+            "scripts/evaluate_policy.py",
+            "--policy",
+            "bc" if policy == "bc" else policy,
+            "--episodes",
+            self.eval_episode_var.get(),
+            "--seed",
+            self.eval_seed_var.get(),
+            "--max-steps",
+            "200",
+            "--headless",
+            "--output",
+            str(output_path),
+        ]
+        if policy in {"bc", "ppo"}:
+            command.extend(["--model", self.model_path_var.get()])
+        log_path = output_path.with_suffix(".log")
+        log_handle = log_path.open("ab")
+        self._evaluation_process = subprocess.Popen(
+            command,
+            cwd=str(Path.cwd()),
+            stdout=log_handle,
+            stderr=log_handle,
+        )
+        log_handle.close()
+        self.eval_status_var.set(f"評価中: {policy} -> {output_path}")
+
+    def _stop_evaluation(self) -> None:
+        process = self._evaluation_process
+        if process is None or process.poll() is not None:
+            self.eval_status_var.set("停止対象の評価はありません")
+            return
+        process.terminate()
+        try:
+            process.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        self.eval_status_var.set("評価を停止しました。完了済み出力を確認してください。")
+
+    def _front_viewer(self) -> None:
+        if sys.platform != "darwin":
+            self.status_vars.get("last_event", self.tk.StringVar()).set(
+                "Viewer front is macOS only"
+            )
+            return
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                (
+                    'tell application "System Events" to if exists process "mjpython" '
+                    'then set frontmost of process "mjpython" to true'
+                ),
+            ],
+            check=False,
+        )
+
+    def _reset_viewer_layout(self) -> None:
+        if sys.platform != "darwin":
+            self.status_vars.get("last_event", self.tk.StringVar()).set(
+                "Viewer layout is macOS only"
+            )
+            return
+        script = "\n".join(
+            [
+                'tell application "System Events"',
+                (
+                    '  if exists process "python3" then set position of window 1 '
+                    'of process "python3" to {60, 80}'
+                ),
+                (
+                    '  if exists process "python3" then set size of window 1 '
+                    'of process "python3" to {620, 820}'
+                ),
+                (
+                    '  if exists process "mjpython" then set position of window 1 '
+                    'of process "mjpython" to {700, 80}'
+                ),
+                (
+                    '  if exists process "mjpython" then set size of window 1 '
+                    'of process "mjpython" to {1040, 820}'
+                ),
+                "end tell",
+            ],
+        )
+        subprocess.run(["osascript", "-e", script], check=False)
 
     def _set_language(self, language: str) -> None:
         normalized = normalize_language(language)
@@ -597,7 +918,8 @@ class TkControlPanel:
             "quit": "quit",
         }
         for command, key in button_keys.items():
-            self.buttons[command].configure(text=translate(key, language))
+            if command in self.buttons:
+                self.buttons[command].configure(text=translate(key, language))
         self.help_text.set(self._help_text(language))
 
     def _refresh(self) -> None:
@@ -627,15 +949,30 @@ class TkControlPanel:
         self.status_vars["success"].set(self._bool_text(snapshot.success, language))
         self.status_vars["recording"].set(self._bool_text(snapshot.recording, language))
         self.status_vars["controller"].set(translate("manual_control", language))
+        if "viewer" in self.status_vars:
+            self.status_vars["viewer"].set(
+                "Connected" if snapshot.viewer_connected else "Disconnected"
+            )
+        if "selected_joint" in self.status_vars:
+            self.status_vars["selected_joint"].set(
+                "-" if snapshot.selected_joint is None else f"J{snapshot.selected_joint + 1}",
+            )
+        if "input_context" in self.status_vars:
+            self.status_vars["input_context"].set(self.input_manager.context.value)
         self.status_vars["last_event"].set(
             f"{translate(state_key, language)} / {snapshot.last_event}",
         )
-        self.buttons["toggle_pause"].configure(
-            text=translate("resume" if snapshot.paused else "pause", language),
-        )
-        self.buttons["toggle_recording"].configure(
-            text=translate("stop_recording" if snapshot.recording else "start_recording", language),
-        )
+        if "toggle_pause" in self.buttons:
+            self.buttons["toggle_pause"].configure(
+                text=translate("resume" if snapshot.paused else "pause", language),
+            )
+        if "toggle_recording" in self.buttons:
+            self.buttons["toggle_recording"].configure(
+                text=translate(
+                    "stop_recording" if snapshot.recording else "start_recording",
+                    language,
+                ),
+            )
         self.root.after(100, self._refresh)
 
     @staticmethod
@@ -655,7 +992,7 @@ class TkControlPanel:
                     "C: グリッパーを閉じる",
                     "Space: 一時停止 / 再開",
                     "Enter: リセット",
-                    "Esc: 終了",
+                    "Esc: 入力解除",
                 ],
             )
         return "\n".join(
@@ -668,7 +1005,7 @@ class TkControlPanel:
                 "C: close gripper",
                 "Space: pause / resume",
                 "Enter: reset",
-                "Esc: quit",
+                "Esc: clear focus",
             ],
         )
 

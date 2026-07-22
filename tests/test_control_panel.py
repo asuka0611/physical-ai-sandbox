@@ -56,13 +56,22 @@ def test_gui_action_mapper_opens_gripper_and_clips_step_size() -> None:
 
 
 def test_snapshot_message_roundtrip() -> None:
-    snapshot = ControlPanelSnapshot(step=5, max_steps=1000, last_event="ready", language="ja")
+    snapshot = ControlPanelSnapshot(
+        step=5,
+        max_steps=1000,
+        last_event="ready",
+        language="ja",
+        selected_joint=2,
+        viewer_connected=True,
+    )
 
     restored = ControlPanelSnapshot.from_message(snapshot.to_message())
 
     assert restored.step == 5
     assert restored.max_steps == 1000
     assert restored.last_event == "ready"
+    assert restored.selected_joint == 2
+    assert restored.viewer_connected is True
 
 
 def test_runtime_uses_separate_mjpython_viewer_process() -> None:
@@ -88,3 +97,14 @@ def test_runtime_no_viewer_uses_current_python() -> None:
     assert command[1] == "-m"
     assert "physical_ai_sandbox.ui.simulation_process" in command
     assert "--no-viewer" in command
+
+
+def test_gui_action_mapper_emergency_stop_zeros_pending_action() -> None:
+    mapper = GuiActionMapper(step_size=1.0)
+
+    mapper.apply(PanelCommand("x_positive"))
+    event = mapper.apply(PanelCommand("emergency_stop"))
+    action = mapper.consume_action()
+
+    assert event == "emergency stop"
+    assert action == [0.0] * 7 + [-1.0]

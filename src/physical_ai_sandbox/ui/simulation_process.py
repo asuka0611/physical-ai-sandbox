@@ -78,6 +78,12 @@ def handle_runtime_command(
             return running, paused, episode, step, "recording stopped"
         env.start_recording({"mode": "control_panel"})
         return running, paused, episode, step, "recording started"
+    if command.name == "emergency_stop":
+        mapper.clear()
+        return False, True, episode, step, "emergency stop"
+    if command.name == "reload_scene":
+        env.reset()
+        return False, True, episode + 1, 0, "scene reloaded"
     if command.name == "reset_camera":
         if viewer is not None:
             viewer.cam.azimuth = 135
@@ -87,6 +93,29 @@ def handle_runtime_command(
         return running, paused, episode, step, "camera reset"
     mapper_event = mapper.apply(command)
     return running, paused, episode, step, mapper_event or last_event
+
+
+def _update_viewer_overlay(
+    viewer: Any,
+    selected_joint: int | None,
+    running: bool,
+    paused: bool,
+    episode: int,
+    step: int,
+    reward: float,
+) -> None:
+    text = [
+        "Physical AI Sandbox",
+        f"Simulation: {'Running' if running and not paused else 'Paused'}",
+        f"Episode: {episode}  Step: {step}",
+        f"Reward: {reward:.3f}",
+        "Selected: -" if selected_joint is None else f"Selected: J{selected_joint + 1}",
+    ]
+    setter = getattr(viewer, "set_texts", None)
+    if setter is None:
+        return
+    with contextlib.suppress(Exception):
+        setter(text)
 
 
 def run_simulation(args: argparse.Namespace) -> int:
@@ -107,6 +136,7 @@ def run_simulation(args: argparse.Namespace) -> int:
         step = 0
         reward = 0.0
         last_event = "ready"
+        selected_joint: int | None = None
         mapper = GuiActionMapper()
         language = normalize_language(args.language)
         if show_viewer:
@@ -128,6 +158,22 @@ def run_simulation(args: argparse.Namespace) -> int:
                     if message.get("type") != "command":
                         continue
                     command = PanelCommand.from_message(message)
+                    if command.name == "select_joint" and command.value is not None:
+                        index = int(command.value)
+                        if 0 <= index < 7:
+                            selected_joint = index
+                            last_event = f"selected J{index + 1}"
+                        else:
+                            last_event = "invalid joint selection"
+                        continue
+                    if command.name == "next_joint":
+                        selected_joint = 0 if selected_joint is None else (selected_joint + 1) % 7
+                        last_event = f"selected J{selected_joint + 1}"
+                        continue
+                    if command.name == "previous_joint":
+                        selected_joint = 6 if selected_joint is None else (selected_joint - 1) % 7
+                        last_event = f"selected J{selected_joint + 1}"
+                        continue
                     if command.name == "quit":
                         last_event = "quit"
                         raise KeyboardInterrupt
@@ -171,9 +217,14 @@ def run_simulation(args: argparse.Namespace) -> int:
                         recording=env.recorder.is_recording,
                         language=language,
                         last_event=last_event,
+                        selected_joint=selected_joint,
+                        viewer_connected=viewer is not None and viewer.is_running(),
                     ),
                 )
                 if viewer is not None:
+                    _update_viewer_overlay(
+                        viewer, selected_joint, running, paused, episode, step, reward
+                    )
                     viewer.sync()
                 time.sleep(env.dt)
     except KeyboardInterrupt:
