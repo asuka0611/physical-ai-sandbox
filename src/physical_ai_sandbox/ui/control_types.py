@@ -29,11 +29,14 @@ class ControlPanelSnapshot:
     step: int = 0
     max_steps: int = 0
     reward: float = 0.0
+    session_step: int = 0
+    elapsed_seconds: float = 0.0
     grasped: bool = False
     lifted: bool = False
     success: bool = False
     recording: bool = False
     controller: str = "Manual Control"
+    mode: str = "Manual Test"
     environment: str = "panda_pick_place"
     language: Language = "ja"
     last_event: str = "ready"

@@ -8,6 +8,7 @@
 - Added Viewport-projected J1-J7 labels, selected-joint highlight, label click selection, and Scene Tree/Viewport/Inspector synchronization.
 - Added resizable workspace panes, Viewport Maximize, Zen Mode, layout reset, and persisted layout/mode/overlay state.
 - Split Manual Test and AI Recording modes so manual inspection does not save episodes and recording shows an explicit REC state.
+- Fixed Manual Test mode so reaching 1000 steps does not end the episode, reset the simulation, save trajectory data, or reinitialize the robot/object. The state now persists until the user presses Reset.
 - Reduced idle rendering load by only streaming unchanged paused frames on camera/layout changes or a low-frequency heartbeat.
 - Added visual-only J1-J7 motor housing geoms and joint label sites while preserving collision, actuator, Observation, and 8D Action contracts.
 - Added Phase 6 MVP robotics interfaces: RobotInterface, SimulationRobot, MockRealRobot, and SafetyLayer.

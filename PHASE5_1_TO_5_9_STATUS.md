@@ -13,6 +13,7 @@ Last updated: 2026-07-22
 - Joint Selection Sync: Scene Tree, Viewport label hit targets, Inspector row highlight, selected-joint status, and camera focus are synchronized.
 - Layout UX: left/right/bottom panes are draggable; Viewport Maximize, Zen Mode, panel visibility, active tab, selected joint, mode, overlay visibility, and camera state are persisted.
 - Mode Separation: Manual Test blocks recording writes; AI Recording enables REC/Stop REC and shows a red REC overlay when recording.
+- Manual Test Session Stability: reaching 1000 steps no longer ends the episode, resets simulation, saves trajectory data, or reinitializes robot/object state. Manual Test state persists until the user presses Reset.
 - Phase 5.6 Policy/Evaluation UI: Policy/model/episode/seed controls and background evaluation subprocess added.
 - Phase 5.7 Metrics: status/metrics panel shows live simulation snapshot values; exported comparison metrics remain available through CLI.
 - Phase 5.8 Replay: action trajectories are saved by policy evaluation JSON; Timeline tab documents replay entry point.

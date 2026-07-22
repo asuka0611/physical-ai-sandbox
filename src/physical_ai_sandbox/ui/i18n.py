@@ -31,7 +31,7 @@ TRANSLATIONS: Final[dict[str, dict[Language, str]]] = {
     "close_gripper": {"en": "Close Gripper", "ja": "グリッパーを閉じる"},
     "robot_status": {"en": "Robot Status", "ja": "ロボット状態"},
     "experiment_status": {"en": "Experiment Status", "ja": "実験状態"},
-    "controller": {"en": "Controller", "ja": "コントローラ"},
+    "controller": {"en": "Mode", "ja": "Mode"},
     "environment": {"en": "Environment", "ja": "環境"},
     "language": {"en": "Language", "ja": "言語"},
     "camera": {"en": "Camera", "ja": "カメラ"},

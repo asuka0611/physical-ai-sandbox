@@ -68,6 +68,7 @@ def handle_runtime_command(
     env: Any,
     renderer: Any,
     mapper: GuiActionMapper,
+    mode: str,
     running: bool,
     paused: bool,
     episode: int,
@@ -88,6 +89,8 @@ def handle_runtime_command(
         env.reset()
         return running, paused, episode + 1, 0, "reset"
     if command.name == "start_recording":
+        if mode != "AI Recording":
+            return running, paused, episode, step, "recording blocked in Manual Test"
         if not env.recorder.is_recording:
             env.start_recording({"mode": "control_panel"})
         return running, paused, episode, step, "recording started"
@@ -99,6 +102,8 @@ def handle_runtime_command(
         if env.recorder.is_recording:
             env.stop_recording({"mode": "control_panel"})
             return running, paused, episode, step, "recording stopped"
+        if mode != "AI Recording":
+            return running, paused, episode, step, "recording blocked in Manual Test"
         env.start_recording({"mode": "control_panel"})
         return running, paused, episode, step, "recording started"
     if command.name == "emergency_stop":
@@ -115,6 +120,19 @@ def handle_runtime_command(
         return running, paused, episode, step, renderer.apply_command(command)
     mapper_event = mapper.apply(command)
     return running, paused, episode, step, mapper_event or last_event
+
+
+def should_end_control_panel_episode(
+    *,
+    mode: str,
+    terminated: bool,
+    truncated: bool,
+    step: int,
+    max_steps: int,
+) -> bool:
+    if mode == "Manual Test":
+        return False
+    return terminated or truncated or step >= max_steps
 
 
 def rgb_to_ppm(rgb: np.ndarray) -> bytes:
@@ -355,8 +373,11 @@ def run_simulation(args: argparse.Namespace) -> int:
         paused = True
         episode = 1
         step = 0
+        session_step = 0
         reward = 0.0
         last_event = "ready"
+        mode = "Manual Test"
+        session_started_at = time.monotonic()
         selected_joint: int | None = None
         mapper = GuiActionMapper()
         language = normalize_language(args.language)
@@ -404,27 +425,47 @@ def run_simulation(args: argparse.Namespace) -> int:
                     if command.name == "quit":
                         last_event = "quit"
                         raise KeyboardInterrupt
+                    if command.name == "set_mode":
+                        requested_mode = str(command.value or "Manual Test")
+                        mode = "AI Recording" if requested_mode == "AI Recording" else "Manual Test"
+                        if mode == "Manual Test" and env.recorder.is_recording:
+                            env.stop_recording({"mode": "manual_test_forced_stop"})
+                        last_event = f"mode {mode}"
+                        continue
                     running, paused, episode, step, last_event = handle_runtime_command(
                         command,
                         env,
                         renderer,
                         mapper,
+                        mode,
                         running,
                         paused,
                         episode,
                         step,
                         last_event,
                     )
+                    if command.name == "reset":
+                        session_step = 0
+                        session_started_at = time.monotonic()
                 if running and not paused:
                     observation, reward, terminated, truncated, _info = env.step(
                         mapper.consume_action(),
                     )
                     step += 1
+                    session_step += 1
                     lifted = observation["cube_position"][2] > env.evaluator.table_top_z + 0.05
-                    if terminated or truncated or step >= max_steps:
+                    if should_end_control_panel_episode(
+                        mode=mode,
+                        terminated=terminated,
+                        truncated=truncated,
+                        step=step,
+                        max_steps=max_steps,
+                    ):
                         last_event = "success" if observation["is_success"] else "failure"
                         episode += 1
                         step = 0
+                        session_step = 0
+                        session_started_at = time.monotonic()
                         env.reset()
                 else:
                     observation = env._observation()
@@ -441,10 +482,14 @@ def run_simulation(args: argparse.Namespace) -> int:
                             step=step,
                             max_steps=max_steps,
                             reward=reward,
+                            session_step=session_step,
+                            elapsed_seconds=time.monotonic() - session_started_at,
                             grasped=bool(observation["is_grasped"]),
                             lifted=bool(lifted),
                             success=bool(observation["is_success"]),
                             recording=env.recorder.is_recording,
+                            mode=mode,
+                            controller=mode,
                             language=language,
                             last_event=last_event,
                             selected_joint=selected_joint,

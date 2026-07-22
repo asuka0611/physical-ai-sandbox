@@ -559,6 +559,7 @@ Key UX changes:
 - J1-J7 are shown in the Robot Inspector, Scene Tree, and Viewport overlay; selecting a joint synchronizes the Tree, overlay, Inspector highlight, and camera focus.
 - Workspace panes are draggable, Viewport Maximize and Zen Mode hide surrounding panels, and layout/camera/mode/overlay state is saved under the local Application Support folder.
 - Manual Test and AI Recording modes are separated. Recording commands are blocked in Manual Test mode and the Viewport displays `REC` only while recording.
+- Manual Test sessions do not auto-end or reset at 1000 steps; the simulation state is preserved until the user presses Reset.
 - Idle rendering is throttled so the paused workspace does not stream unchanged frames continuously.
 
 See `docs/ui_workspace.md`, `docs/robot_visual_language.md`, and `PHASE5_1_TO_5_9_STATUS.md`.

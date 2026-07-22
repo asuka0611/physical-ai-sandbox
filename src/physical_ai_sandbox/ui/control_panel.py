@@ -399,6 +399,7 @@ class TkControlPanel:
         self._viewport_drag: dict[str, object] | None = None
         self._viewport_pointer = (0, 0)
         self._camera_state_sent = False
+        self._mode_state_sent = False
         self._save_pending = False
         self._last_viewport_size = (0, 0)
         self._maximized = False
@@ -415,6 +416,7 @@ class TkControlPanel:
         self.input_manager = InputManager()
         self._evaluation_process: subprocess.Popen[bytes] | None = None
         self._build()
+        self.command_queue.put("set_mode", self.mode_var.get())
         self._bind_keys()
         self._refresh()
         self._build_menu()
@@ -962,6 +964,8 @@ class TkControlPanel:
 
     def _on_mode_changed(self) -> None:
         self.workspace_state["mode"] = self.mode_var.get()
+        self.command_queue.put("set_mode", self.mode_var.get())
+        self._mode_state_sent = True
         self._schedule_workspace_save()
 
     def _on_viewport_press(self, event: object) -> str:
@@ -1037,10 +1041,12 @@ class TkControlPanel:
             return
         if name == "restart_viewer":
             self._camera_state_sent = False
+            self._mode_state_sent = False
             Thread(target=self.runtime.restart_viewer, daemon=True).start()
             return
         if name == "restart_all":
             self._camera_state_sent = False
+            self._mode_state_sent = False
             Thread(target=self.runtime.restart_viewer, daemon=True).start()
             return
         if name == "emergency_stop":
@@ -1330,6 +1336,8 @@ class TkControlPanel:
         self.status_vars["episode"].set(str(snapshot.episode))
         if snapshot.error_message and snapshot.max_steps <= 1:
             self.status_vars["step"].set("起動失敗")
+        elif snapshot.mode == "Manual Test":
+            self.status_vars["step"].set(f"Session Step {snapshot.session_step}")
         else:
             self.status_vars["step"].set(f"{snapshot.step} / {snapshot.max_steps}")
         self.status_vars["reward"].set(f"{snapshot.reward:.3f}")
@@ -1337,7 +1345,7 @@ class TkControlPanel:
         self.status_vars["lifted"].set(self._bool_text(snapshot.lifted, language))
         self.status_vars["success"].set(self._bool_text(snapshot.success, language))
         self.status_vars["recording"].set(self._bool_text(snapshot.recording, language))
-        self.status_vars["controller"].set(self.mode_var.get())
+        self.status_vars["controller"].set(snapshot.mode)
         if "viewer" in self.status_vars:
             self.status_vars["viewer"].set(
                 "Connected" if snapshot.viewer_connected else "Disconnected"
@@ -1357,6 +1365,9 @@ class TkControlPanel:
             if isinstance(camera, dict):
                 self.command_queue.put("camera_state", camera)
             self._camera_state_sent = True
+        if snapshot.viewer_connected and not self._mode_state_sent:
+            self.command_queue.put("set_mode", self.mode_var.get())
+            self._mode_state_sent = True
         self._refresh_viewport(snapshot)
         if "toggle_pause" in self.buttons:
             self.buttons["toggle_pause"].configure(
@@ -1413,19 +1424,39 @@ class TkControlPanel:
         metadata = self.runtime.latest_frame_metadata()
         fps = float(metadata.get("fps", 0.0) or 0.0)
         simulation_hz = float(metadata.get("simulation_hz", 0.0) or 0.0)
-        overlay_lines = [
-            f"Episode {snapshot.episode}  Step {snapshot.step}/{snapshot.max_steps}",
-            f"Reward {snapshot.reward:.3f}",
-            f"FPS {fps:.1f}  Simulation {simulation_hz:.1f} Hz",
-            f"Policy {self.policy_var.get()}  Mode {self.mode_var.get()}",
-            f"Recording {'REC' if snapshot.recording else 'OFF'}",
-            (
-                "Selected -"
-                if snapshot.selected_joint is None
-                else f"Selected J{snapshot.selected_joint + 1}"
-            ),
-            f"Input {self.input_manager.context.value}",
-        ]
+        if snapshot.mode == "Manual Test":
+            overlay_lines = [
+                "Mode: Manual Test",
+                "Recording: OFF",
+                f"Session Step: {snapshot.session_step}",
+                f"Elapsed: {self._format_elapsed(snapshot.elapsed_seconds)}",
+                f"Reward {snapshot.reward:.3f}",
+                f"FPS {fps:.1f}  Simulation {simulation_hz:.1f} Hz",
+                f"Policy {self.policy_var.get()}",
+                (
+                    "Selected -"
+                    if snapshot.selected_joint is None
+                    else f"Selected J{snapshot.selected_joint + 1}"
+                ),
+                f"Input {self.input_manager.context.value}",
+            ]
+        else:
+            overlay_lines = [
+                f"Mode: {snapshot.mode}",
+                f"Recording: {'REC' if snapshot.recording else 'OFF'}",
+                f"Episode {snapshot.episode}  Step {snapshot.step}/{snapshot.max_steps}",
+                f"Session Step: {snapshot.session_step}",
+                f"Elapsed: {self._format_elapsed(snapshot.elapsed_seconds)}",
+                f"Reward {snapshot.reward:.3f}",
+                f"FPS {fps:.1f}  Simulation {simulation_hz:.1f} Hz",
+                f"Policy {self.policy_var.get()}",
+                (
+                    "Selected -"
+                    if snapshot.selected_joint is None
+                    else f"Selected J{snapshot.selected_joint + 1}"
+                ),
+                f"Input {self.input_manager.context.value}",
+            ]
         if self.overlay_enabled_var.get():
             canvas.create_text(
                 12,
@@ -1581,6 +1612,13 @@ class TkControlPanel:
     @staticmethod
     def _bool_text(value: bool, language: str) -> str:
         return translate("yes" if value else "no", language)
+
+    @staticmethod
+    def _format_elapsed(seconds: float) -> str:
+        total_seconds = max(0, int(seconds))
+        minutes, second = divmod(total_seconds, 60)
+        hour, minute = divmod(minutes, 60)
+        return f"{hour:02d}:{minute:02d}:{second:02d}"
 
     @staticmethod
     def _help_text(language: str) -> str:

@@ -64,8 +64,11 @@ def test_snapshot_message_roundtrip() -> None:
     snapshot = ControlPanelSnapshot(
         step=5,
         max_steps=1000,
+        session_step=4382,
+        elapsed_seconds=138.0,
         last_event="ready",
         language="ja",
+        mode="Manual Test",
         selected_joint=2,
         viewer_connected=True,
     )
@@ -74,7 +77,10 @@ def test_snapshot_message_roundtrip() -> None:
 
     assert restored.step == 5
     assert restored.max_steps == 1000
+    assert restored.session_step == 4382
+    assert restored.elapsed_seconds == 138.0
     assert restored.last_event == "ready"
+    assert restored.mode == "Manual Test"
     assert restored.selected_joint == 2
     assert restored.viewer_connected is True
 
@@ -194,3 +200,65 @@ def test_embedded_viewport_resize_respects_framebuffer_limit() -> None:
     assert renderer.height == 960
     assert created_sizes == [(1280, 960)]
     assert renderer.dirty is True
+
+
+def test_manual_test_mode_never_auto_ends_control_panel_episode() -> None:
+    from physical_ai_sandbox.ui.simulation_process import should_end_control_panel_episode
+
+    assert (
+        should_end_control_panel_episode(
+            mode="Manual Test",
+            terminated=True,
+            truncated=True,
+            step=5000,
+            max_steps=1000,
+        )
+        is False
+    )
+
+
+def test_ai_recording_mode_keeps_episode_limits() -> None:
+    from physical_ai_sandbox.ui.simulation_process import should_end_control_panel_episode
+
+    assert (
+        should_end_control_panel_episode(
+            mode="AI Recording",
+            terminated=False,
+            truncated=False,
+            step=1000,
+            max_steps=1000,
+        )
+        is True
+    )
+
+
+def test_manual_test_mode_blocks_recording_command_in_simulation() -> None:
+    from physical_ai_sandbox.ui.simulation_process import handle_runtime_command
+
+    class FakeRecorder:
+        is_recording = False
+
+    class FakeEnv:
+        recorder = FakeRecorder()
+
+        def start_recording(self, _metadata: dict[str, object]) -> None:
+            raise AssertionError("Manual Test must not start recording")
+
+    running, paused, episode, step, event = handle_runtime_command(
+        PanelCommand("start_recording"),
+        FakeEnv(),
+        None,
+        GuiActionMapper(),
+        "Manual Test",
+        True,
+        False,
+        1,
+        1200,
+        "ready",
+    )
+
+    assert running is True
+    assert paused is False
+    assert episode == 1
+    assert step == 1200
+    assert event == "recording blocked in Manual Test"
