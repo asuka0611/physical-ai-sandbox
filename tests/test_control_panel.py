@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -160,3 +161,36 @@ def test_rgb_to_ppm_encodes_tk_photoimage_compatible_frame() -> None:
     frame = np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.uint8)
 
     assert rgb_to_ppm(frame) == b"P6\n2 1\n255\n\x01\x02\x03\x04\x05\x06"
+
+
+def test_embedded_viewport_resize_respects_framebuffer_limit() -> None:
+    from physical_ai_sandbox.ui.simulation_process import EmbeddedViewportRenderer
+
+    created_sizes: list[tuple[int, int]] = []
+
+    class FakeRenderer:
+        def close(self) -> None:
+            return None
+
+    class FakeMujoco:
+        @staticmethod
+        def Renderer(_model: object, *, height: int, width: int) -> FakeRenderer:
+            created_sizes.append((width, height))
+            return FakeRenderer()
+
+    renderer = EmbeddedViewportRenderer.__new__(EmbeddedViewportRenderer)
+    renderer.model = SimpleNamespace(
+        vis=SimpleNamespace(global_=SimpleNamespace(offwidth=1280, offheight=960)),
+    )
+    renderer.width = 720
+    renderer.height = 480
+    renderer._renderer = FakeRenderer()
+    renderer._mujoco = FakeMujoco()
+    renderer.dirty = False
+
+    renderer.resize(2000, 1200)
+
+    assert renderer.width == 1280
+    assert renderer.height == 960
+    assert created_sizes == [(1280, 960)]
+    assert renderer.dirty is True

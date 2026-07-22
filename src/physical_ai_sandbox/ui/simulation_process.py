@@ -199,8 +199,10 @@ class EmbeddedViewportRenderer:
             self.dirty = True
 
     def resize(self, width: int, height: int) -> None:
-        width = int(np.clip(width, 240, 1920))
-        height = int(np.clip(height, 180, 1080))
+        framebuffer_width = int(getattr(self.model.vis.global_, "offwidth", 1280))
+        framebuffer_height = int(getattr(self.model.vis.global_, "offheight", 960))
+        width = int(np.clip(width, 240, framebuffer_width))
+        height = int(np.clip(height, 180, framebuffer_height))
         if width == self.width and height == self.height:
             return
         self.width = width
