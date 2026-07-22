@@ -542,3 +542,25 @@ Implemented:
   stability, and NaN checks.
 
 Known limitations are tracked in `KNOWN_ISSUES.md`. Detailed Phase 1 completion status is in `PHASE1_COMPLETION_STATUS.md`.
+
+## Integrated Workspace MVP
+
+The macOS control panel now starts as a workspace-style UI: toolbar, scene/policy sidebar, 3D Viewer management area, robot inspector, and bottom Console/Metrics/Evaluation/Timeline tabs. MuJoCo Viewer remains a separate `mjpython` process for stability, with macOS best-effort buttons for Viewer front/position reset.
+
+Key UX changes:
+
+- Text fields no longer dispatch W/A/S/D/Space robot shortcuts while focused.
+- Escape clears text focus instead of quitting the app.
+- Restart Viewer, Restart All, and Emergency Stop controls are available from the toolbar.
+- J1-J7 are shown in the Robot Inspector and the MJCF includes visual-only motor housings and joint label sites.
+
+See `docs/ui_workspace.md`, `docs/robot_visual_language.md`, and `PHASE5_1_TO_5_9_STATUS.md`.
+
+## Sim2Real and Perception MVP
+
+Phase 6/7 MVP interfaces are available for future hardware and camera work:
+
+- `physical_ai_sandbox.robotics`: `RobotInterface`, `SimulationRobot`, `MockRealRobot`, and `SafetyLayer`.
+- `physical_ai_sandbox.perception`: `CameraSource`, `MockCamera`, `ObjectPerception`, and `ObservationBuilder`.
+
+These are scaffolds only. No real robot or real camera validation is claimed. See `docs/sim2real_interface.md` and `docs/perception_pipeline.md`.

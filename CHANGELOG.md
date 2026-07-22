@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.9 - 2026-07-22
+
+- Started Phase 5.1-5.9 workspace implementation with a Dock-style Tk UI, centralized InputManager, restart/recovery controls, Viewer front/position actions, evaluation tab, and Timeline placeholder.
+- Added visual-only J1-J7 motor housing geoms and joint label sites while preserving collision, actuator, Observation, and 8D Action contracts.
+- Added Phase 6 MVP robotics interfaces: RobotInterface, SimulationRobot, MockRealRobot, and SafetyLayer.
+- Added Phase 7 MVP perception interfaces: CameraSource, MockCamera, ObjectPerception, and ObservationBuilder.
+- Added tests for input focus, robot safety/interface behavior, perception observation building, joint visual markers, and emergency stop mapping.
+- Documented that embedded Viewer, full replay UI, real robot connection, and real camera perception remain unvalidated future work.
+
 ## 0.5.0 - 2026-07-22
 
 - Added Phase 5 shared Policy interface for Random, Manual, Behavior Cloning, and PPO adapters.

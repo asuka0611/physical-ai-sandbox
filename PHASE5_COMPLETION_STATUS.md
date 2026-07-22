@@ -40,3 +40,9 @@ Phase 5 is partially complete as a headless policy evaluation foundation. The UI
 ## Next Step
 
 Add non-blocking Tk UI controls that launch the evaluation runner in a background process, then add trajectory replay in the existing MuJoCo Viewer.
+
+## Phase 5.1-5.9 Workspace Update
+
+A broad MVP pass has been added for workspace UX, input management, restart controls, robot joint visibility, policy evaluation UI launch, metrics tabs, and replay scaffolding. See `PHASE5_1_TO_5_9_STATUS.md`.
+
+This is not full Phase 5.1-5.9 completion yet because full Viewer embedding, complete trajectory replay controls, 10-minute memory verification, and dynamic selected-joint 3D highlight are still pending.

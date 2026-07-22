@@ -60,3 +60,11 @@
 - The local environment must already have `uv sync` completed and `uv` visible from the login shell PATH.
 - The Launcher leaves a LaunchAgent plist under `~/Library/Application Support/Physical AI Sandbox Launcher/`; this is used only to start the local UI without Terminal.
 - Developer ID signing, notarization, bundled Python/MuJoCo, Intel support, and public distribution packaging are intentionally out of scope for this local Launcher.
+
+## Phase 5 Workspace Remaining Issues
+
+- MuJoCo Viewer is still a separate window by design; full Tk embedding is deferred until offscreen rendering stability is proven.
+- Viewer positioning/fronting uses macOS Accessibility best-effort commands and may require user permission.
+- Timeline replay UI is not complete; evaluation JSON stores action trajectories for future replay work.
+- Dynamic 3D selected-joint text/highlight is limited by official Viewer APIs; visual label sites and UI selection status are implemented first.
+- Phase 6/7 are simulation/mock scaffolds only, with no real hardware or real camera validation.
