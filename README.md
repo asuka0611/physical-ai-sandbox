@@ -554,9 +554,18 @@ Key UX changes:
 - Text fields no longer dispatch W/A/S/D/Space robot shortcuts while focused.
 - Escape clears text focus instead of quitting the app.
 - Restart Viewer, Restart All, and Emergency Stop controls are available from the toolbar.
-- J1-J7 are shown in the Robot Inspector and the MJCF includes visual-only motor housings and joint label sites.
+- The embedded Viewport supports left-drag Orbit, Shift-left-drag or middle-drag Pan, mouse-wheel Zoom, double-click Focus/Isometric, Camera Reset, and Front/Right/Top/Back/Left/Bottom/Isometric presets.
+- A Viewport camera gizmo is drawn in the upper-right and can switch to Top/Front/Right/Isometric views.
+- J1-J7 are shown in the Robot Inspector, Scene Tree, and Viewport overlay; selecting a joint synchronizes the Tree, overlay, Inspector highlight, and camera focus.
+- Workspace panes are draggable, Viewport Maximize and Zen Mode hide surrounding panels, and layout/camera/mode/overlay state is saved under the local Application Support folder.
+- Manual Test and AI Recording modes are separated. Recording commands are blocked in Manual Test mode and the Viewport displays `REC` only while recording.
+- Idle rendering is throttled so the paused workspace does not stream unchanged frames continuously.
 
 See `docs/ui_workspace.md`, `docs/robot_visual_language.md`, and `PHASE5_1_TO_5_9_STATUS.md`.
+
+Current Workspace screenshot:
+
+![Physical AI Sandbox Workspace](docs/screenshots/workspace_ui_phase_2026-07-22.png)
 
 ## Sim2Real and Perception MVP
 

@@ -64,7 +64,9 @@
 ## Phase 5 Workspace Remaining Issues
 
 - The ControlPanel path now uses an embedded offscreen-rendered Viewport rather than an external MuJoCo Viewer window.
-- The embedded Viewport is frame-stream based; native MuJoCo Viewer menus, picking, and advanced camera manipulation are not integrated.
+- The embedded Viewport is frame-stream based; native MuJoCo Viewer menus are not integrated.
+- Orbit, Pan, Zoom, focus, reset, and preset cameras are custom IPC controls. They cover the main workspace workflow but are not a full replacement for every native MuJoCo Viewer camera shortcut.
+- Joint click selection currently targets projected J1-J7 label overlays, not arbitrary 3D mesh picking.
 - Timeline replay UI is not complete; evaluation JSON stores action trajectories for future replay work.
-- Dynamic 3D selected-joint text/highlight is currently shown through UI/snapshot/overlay status; visual label sites remain the stable in-scene markers.
+- Long-run memory-leak testing still needs an extended manual run; short smoke checks only sample CPU/RSS.
 - Phase 6/7 are simulation/mock scaffolds only, with no real hardware or real camera validation.

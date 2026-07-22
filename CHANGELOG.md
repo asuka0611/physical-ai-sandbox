@@ -4,6 +4,11 @@
 
 - Started Phase 5.1-5.9 workspace implementation with a Dock-style Tk UI, centralized InputManager, restart/recovery controls, embedded 3D Viewport, evaluation tab, and Timeline placeholder.
 - Replaced the ControlPanel external MuJoCo Viewer window with an offscreen MuJoCo renderer in the `mjpython` simulation process. RGB frames are sent to the Tk workspace and drawn directly inside the central 3D Viewport.
+- Added custom embedded Viewport camera controls: Orbit, Pan, Zoom, double-click focus, Camera Reset, preset views, Camera Gizmo, and camera state persistence.
+- Added Viewport-projected J1-J7 labels, selected-joint highlight, label click selection, and Scene Tree/Viewport/Inspector synchronization.
+- Added resizable workspace panes, Viewport Maximize, Zen Mode, layout reset, and persisted layout/mode/overlay state.
+- Split Manual Test and AI Recording modes so manual inspection does not save episodes and recording shows an explicit REC state.
+- Reduced idle rendering load by only streaming unchanged paused frames on camera/layout changes or a low-frequency heartbeat.
 - Added visual-only J1-J7 motor housing geoms and joint label sites while preserving collision, actuator, Observation, and 8D Action contracts.
 - Added Phase 6 MVP robotics interfaces: RobotInterface, SimulationRobot, MockRealRobot, and SafetyLayer.
 - Added Phase 7 MVP perception interfaces: CameraSource, MockCamera, ObjectPerception, and ObservationBuilder.

@@ -27,6 +27,6 @@ Phase 5 now has a headless policy evaluation foundation: shared Policy adapters 
 
 ## Phase 5.1-5.9 / Phase 6-7 MVP Update
 
-The app now prioritizes UI/UX and recovery: workspace-style Tk layout, centralized input focus handling, restart controls, background evaluation launch, Viewer window management controls, and robot joint visual markers. Full embedded rendering and complete replay controls are intentionally not claimed complete.
+The app now prioritizes UI/UX and recovery: workspace-style Tk layout, centralized input focus handling, restart controls, background evaluation launch, embedded offscreen Viewport rendering, custom camera controls, projected J1-J7 labels, joint selection sync, resizable panes, Viewport Maximize/Zen Mode, Manual Test vs AI Recording modes, and persisted workspace state. Complete replay controls are intentionally not claimed complete.
 
 Phase 6 and 7 are MVP foundations only: Simulation/Mock robot interfaces with safety filtering, plus MockCamera and ObservationBuilder with provenance metadata. Real robot and real camera support are not implemented or validated.
