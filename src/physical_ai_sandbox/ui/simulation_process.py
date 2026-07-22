@@ -366,6 +366,7 @@ def run_simulation(args: argparse.Namespace) -> int:
         frame_sequence = 0
         frame_period = 1.0 / max(1.0, float(args.render_fps))
         last_frame_time = 0.0
+        last_snapshot_time = 0.0
         measured_fps = 0.0
         try:
             while True:
@@ -426,26 +427,29 @@ def run_simulation(args: argparse.Namespace) -> int:
                 else:
                     observation = env._observation()
                     lifted = observation["cube_position"][2] > env.evaluator.table_top_z + 0.05
-                send_snapshot(
-                    conn,
-                    ControlPanelSnapshot(
-                        running=running,
-                        paused=paused,
-                        episode=episode,
-                        step=step,
-                        max_steps=max_steps,
-                        reward=reward,
-                        grasped=bool(observation["is_grasped"]),
-                        lifted=bool(lifted),
-                        success=bool(observation["is_success"]),
-                        recording=env.recorder.is_recording,
-                        language=language,
-                        last_event=last_event,
-                        selected_joint=selected_joint,
-                        viewer_connected=renderer is not None,
-                    ),
-                )
                 now = time.monotonic()
+                snapshot_period = env.dt if running and not paused else 0.1
+                if now - last_snapshot_time >= snapshot_period:
+                    send_snapshot(
+                        conn,
+                        ControlPanelSnapshot(
+                            running=running,
+                            paused=paused,
+                            episode=episode,
+                            step=step,
+                            max_steps=max_steps,
+                            reward=reward,
+                            grasped=bool(observation["is_grasped"]),
+                            lifted=bool(lifted),
+                            success=bool(observation["is_success"]),
+                            recording=env.recorder.is_recording,
+                            language=language,
+                            last_event=last_event,
+                            selected_joint=selected_joint,
+                            viewer_connected=renderer is not None,
+                        ),
+                    )
+                    last_snapshot_time = now
                 should_render = False
                 if renderer is not None and now - last_frame_time >= frame_period:
                     should_render = running and not paused
@@ -467,7 +471,8 @@ def run_simulation(args: argparse.Namespace) -> int:
                     )
                     frame_sequence += 1
                     last_frame_time = now
-                time.sleep(env.dt)
+                loop_sleep = env.dt if running and not paused else 0.05
+                time.sleep(loop_sleep)
         finally:
             if renderer is not None:
                 renderer.close()
