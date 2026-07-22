@@ -24,6 +24,13 @@ VISUAL_ONLY_GEOMS = [
     "hand_cover_geom",
     "left_finger_cover_geom",
     "right_finger_cover_geom",
+    "joint1_motor_housing_geom",
+    "joint2_motor_housing_geom",
+    "joint3_motor_housing_geom",
+    "joint4_motor_housing_geom",
+    "joint5_motor_housing_geom",
+    "joint6_motor_housing_geom",
+    "joint7_motor_housing_geom",
 ]
 
 
@@ -58,6 +65,8 @@ def test_robot_and_scene_visual_mjcf_loads_with_names_preserved() -> None:
     for name in [f"act_joint{index}" for index in range(1, 8)]:
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name) >= 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "end_effector") >= 0
+    for name in [f"joint{index}_label_site" for index in range(1, 8)]:
+        assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, name) >= 0
 
 
 def test_visual_only_geoms_have_collision_disabled() -> None:
