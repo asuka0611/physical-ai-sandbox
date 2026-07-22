@@ -2,19 +2,19 @@
 
 ## 起動
 
-日本語操作パネルとMuJoCo Viewerを同時に起動します。
+日本語Workspaceと埋め込み3D Viewportを起動します。
 
 ```bash
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
 
 英語表示で起動する場合:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py --language en
+uv run python scripts/run_control_panel.py --language en
 ```
 
-macOSではMuJoCo Viewerのために`mjpython`を使用してください。
+Workspace本体は通常Python/Tkinterで起動します。MuJoCo simulationとoffscreen renderingは内部で別の`mjpython`プロセスとして起動し、3Dフレームを中央Viewportへ表示します。
 
 ## 操作パネル
 
@@ -39,11 +39,11 @@ macOSではMuJoCo Viewerのために`mjpython`を使用してください。
 | C | グリッパーを閉じる |
 | Space | 一時停止 / 再開 |
 | Enter | リセット |
-| Esc | 終了 |
+| Esc | 入力解除 |
 
 ## 既存Viewer
 
-従来の手動Viewerも維持しています。
+従来の手動MuJoCo Viewerも別CLIとして維持しています。WorkspaceのControlPanel経路では別Viewerウィンドウを開きません。
 
 ```bash
 uv run mjpython scripts/run_manual.py

@@ -11,7 +11,7 @@ cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
 uv run python scripts/run_control_panel.py
 ```
 
-操作パネルは通常Python/Tkinterで起動し、MuJoCo Viewerは別の `mjpython` simulation process で起動します。
+操作パネルは通常Python/Tkinterで起動します。MuJoCo simulationとoffscreen renderingは別の `mjpython` process で実行され、描画フレームはWorkspace中央の3D Viewportに表示されます。ControlPanel経路では別のMuJoCo Viewerウィンドウを開きません。
 
 ## 必要条件
 

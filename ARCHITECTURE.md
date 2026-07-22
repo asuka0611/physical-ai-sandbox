@@ -27,7 +27,7 @@ depend on a viewer.
 
 ## Phase 4.6 macOS Launcher Architecture
 
-The local macOS Launcher is not a self-contained application. It starts a user LaunchAgent that runs `uv run python scripts/run_control_panel.py` in the local checkout without opening Terminal. The Tk operation panel stays in a normal Python process. The MuJoCo simulation and Viewer run in a separate `mjpython` process via `physical_ai_sandbox.ui.simulation_process`. The two processes exchange command and snapshot messages over `multiprocessing.connection` on localhost. This avoids the macOS `mjpython` + Tkinter/Tcl-Tk 9 same-process crash and keeps `mujoco.viewer.launch_passive` out of a Tk worker thread.
+The local macOS Launcher is not a self-contained application. It starts a user LaunchAgent that runs `uv run python scripts/run_control_panel.py` in the local checkout without opening Terminal. The Tk operation panel stays in a normal Python process. MuJoCo simulation and offscreen rendering run in a separate `mjpython` process via `physical_ai_sandbox.ui.simulation_process`. The two processes exchange command, snapshot, and PPM frame messages over `multiprocessing.connection` on localhost. This avoids the macOS `mjpython` + Tkinter/Tcl-Tk 9 same-process crash and keeps `mujoco.viewer.launch_passive` out of the ControlPanel path.
 
 ## Phase 5 Policy Evaluation Architecture
 
@@ -35,7 +35,7 @@ Phase 5 now introduces a shared `Policy` interface under `physical_ai_sandbox.po
 
 ## Phase 5.1-5.9 Workspace MVP
 
-The UI keeps the Phase 4.6 two-process split: Tkinter runs in normal Python, while MuJoCo Viewer remains in a separate `mjpython` simulation process. The Tk surface is reorganized as a workspace with toolbar, scene/policy sidebar, Viewer management area, robot inspector, and bottom tabs. `InputManager` centralizes keyboard focus so Entry-like widgets do not dispatch robot shortcuts. Recovery commands restart the Viewer process by rebuilding IPC instead of merging Tkinter and MuJoCo into one process.
+The UI keeps the Phase 4.6 two-process split: Tkinter runs in normal Python, while MuJoCo simulation and rendering remain in a separate `mjpython` process. Instead of opening the official MuJoCo Viewer window, the simulation process uses MuJoCo's offscreen `Renderer`, encodes RGB frames as PPM, and streams them into a Tk Canvas in the central 3D Viewport. The Tk surface is organized as a workspace with toolbar, scene/policy sidebar, embedded Viewport, robot inspector, and bottom tabs. `InputManager` centralizes keyboard focus so Entry-like widgets do not dispatch robot shortcuts.
 
 Robot visual changes are MJCF visual-only additions: J1-J7 motor housings and label sites. They do not change collision geoms, actuators, Observation, or the fixed 8D Action contract.
 

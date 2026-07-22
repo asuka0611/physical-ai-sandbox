@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import contextlib
 import os
 import secrets
@@ -86,6 +87,9 @@ class ControlPanelRuntime:
         self._monitor_thread: Thread | None = None
         self._log_file: Path | None = None
         self._restart_times: list[float] = []
+        self._frame_lock = Lock()
+        self._latest_frame: bytes | None = None
+        self._latest_frame_sequence = 0
 
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
@@ -130,6 +134,10 @@ class ControlPanelRuntime:
     def emergency_stop(self) -> None:
         self.command_queue.put("emergency_stop")
         self.state_store.update(running=False, paused=True, last_event="emergency stop")
+
+    def latest_frame(self) -> tuple[int, bytes | None]:
+        with self._frame_lock:
+            return self._latest_frame_sequence, self._latest_frame
 
     def join(self, timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
@@ -224,7 +232,14 @@ class ControlPanelRuntime:
             snapshot = ControlPanelSnapshot.from_message(message)
             if snapshot.language != self.language:
                 snapshot = replace(snapshot, language=self.language)
-            self.state_store.replace(replace(snapshot, viewer_connected=True))
+            self.state_store.replace(snapshot)
+            return
+        if message_type == "frame":
+            payload = message.get("ppm")
+            if isinstance(payload, str):
+                with self._frame_lock:
+                    self._latest_frame = base64.b64decode(payload.encode("ascii"))
+                    self._latest_frame_sequence = int(message.get("sequence", 0))
             return
         if message_type == "error":
             error_message = str(message.get("message") or "Viewerを起動できませんでした。")
@@ -363,6 +378,10 @@ class TkControlPanel:
         self.buttons: dict[str, Any] = {}
         self.labels: dict[str, Any] = {}
         self._shown_error_message: str | None = None
+        self._viewport_image: Any | None = None
+        self._viewport_frame_sequence = -1
+        self.viewport_canvas: Any | None = None
+        self.viewport_status_var = tk.StringVar(value="Viewport initializing...")
         self.input_manager = InputManager()
         self._evaluation_process: subprocess.Popen[bytes] | None = None
         self._build()
@@ -503,9 +522,9 @@ class TkControlPanel:
             ("toggle_pause", "pause"),
             ("reset", "reset"),
             ("reset_camera", "reset_camera"),
-            ("restart_viewer", "Restart Viewer"),
-            ("restart_all", "Restart All"),
-            ("emergency_stop", "Emergency Stop"),
+            ("restart_viewer", "restart_viewport"),
+            ("restart_all", "restart_all"),
+            ("emergency_stop", "emergency_stop"),
             ("quit", "quit"),
         ]
         for index, (command, label_key) in enumerate(toolbar_commands):
@@ -576,17 +595,40 @@ class TkControlPanel:
             fg="#f8fafc",
             font=("Helvetica", 16, "bold"),
         ).pack(anchor="w")
-        tk.Label(
+        viewport_shell = tk.Frame(
             parent,
-            text=(
-                "MuJoCo Viewerは安定性のため別プロセスで表示します。"
-                "位置リセットと前面表示で統合ワークスペースとして扱います。"
-            ),
-            wraplength=500,
-            justify="left",
-            bg="#111827",
+            bg="#030712",
+            highlightthickness=1,
+            highlightbackground="#334155",
+        )
+        viewport_shell.pack(fill="both", expand=True, pady=(8, 10))
+        viewport_shell.grid_columnconfigure(0, weight=1)
+        viewport_shell.grid_rowconfigure(0, weight=1)
+        self.viewport_canvas = tk.Canvas(
+            viewport_shell,
+            bg="#020617",
+            highlightthickness=0,
+            takefocus=True,
+        )
+        self.viewport_canvas.grid(row=0, column=0, sticky="nsew")
+        self.viewport_canvas.bind("<Button-1>", lambda _event: self.root.focus_set())
+        self.viewport_canvas.create_text(
+            20,
+            20,
+            anchor="nw",
+            text="Viewport initializing...",
+            fill="#e2e8f0",
+            font=("Helvetica", 13, "bold"),
+            tags=("viewport_status",),
+        )
+        tk.Label(
+            viewport_shell,
+            textvariable=self.viewport_status_var,
+            bg="#030712",
             fg="#94a3b8",
-        ).pack(anchor="w", pady=(4, 10))
+            padx=8,
+            pady=4,
+        ).grid(row=1, column=0, sticky="ew")
         status_frame = tk.LabelFrame(
             parent, bg="#111827", fg="#f4f7fb", text="Status", padx=10, pady=8
         )
@@ -617,7 +659,7 @@ class TkControlPanel:
         action_frame = tk.Frame(parent, bg="#111827")
         action_frame.pack(fill="x", pady=(12, 0))
         for index, command in enumerate(["reset_camera", "front_viewer", "viewer_layout"]):
-            text = {"front_viewer": "Viewerを前面へ", "viewer_layout": "Viewer位置リセット"}.get(
+            text = {"front_viewer": "Viewportへフォーカス", "viewer_layout": "Viewport更新"}.get(
                 command,
                 translate(command, self.language_var.get()),
             )
@@ -850,52 +892,14 @@ class TkControlPanel:
         self.eval_status_var.set("評価を停止しました。完了済み出力を確認してください。")
 
     def _front_viewer(self) -> None:
-        if sys.platform != "darwin":
-            self.status_vars.get("last_event", self.tk.StringVar()).set(
-                "Viewer front is macOS only"
-            )
-            return
-        subprocess.run(
-            [
-                "osascript",
-                "-e",
-                (
-                    'tell application "System Events" to if exists process "mjpython" '
-                    'then set frontmost of process "mjpython" to true'
-                ),
-            ],
-            check=False,
-        )
+        self.root.focus_set()
+        if self.viewport_canvas is not None:
+            self.viewport_canvas.focus_set()
+        self.status_vars.get("last_event", self.tk.StringVar()).set("viewport focused")
 
     def _reset_viewer_layout(self) -> None:
-        if sys.platform != "darwin":
-            self.status_vars.get("last_event", self.tk.StringVar()).set(
-                "Viewer layout is macOS only"
-            )
-            return
-        script = "\n".join(
-            [
-                'tell application "System Events"',
-                (
-                    '  if exists process "python3" then set position of window 1 '
-                    'of process "python3" to {60, 80}'
-                ),
-                (
-                    '  if exists process "python3" then set size of window 1 '
-                    'of process "python3" to {620, 820}'
-                ),
-                (
-                    '  if exists process "mjpython" then set position of window 1 '
-                    'of process "mjpython" to {700, 80}'
-                ),
-                (
-                    '  if exists process "mjpython" then set size of window 1 '
-                    'of process "mjpython" to {1040, 820}'
-                ),
-                "end tell",
-            ],
-        )
-        subprocess.run(["osascript", "-e", script], check=False)
+        self._viewport_frame_sequence = -1
+        self.status_vars.get("last_event", self.tk.StringVar()).set("viewport refresh requested")
 
     def _set_language(self, language: str) -> None:
         normalized = normalize_language(language)
@@ -915,6 +919,9 @@ class TkControlPanel:
             "open_gripper": "open_gripper",
             "close_gripper": "close_gripper",
             "reset_camera": "reset_camera",
+            "restart_viewer": "restart_viewport",
+            "restart_all": "restart_all",
+            "emergency_stop": "emergency_stop",
             "quit": "quit",
         }
         for command, key in button_keys.items():
@@ -962,6 +969,7 @@ class TkControlPanel:
         self.status_vars["last_event"].set(
             f"{translate(state_key, language)} / {snapshot.last_event}",
         )
+        self._refresh_viewport(snapshot)
         if "toggle_pause" in self.buttons:
             self.buttons["toggle_pause"].configure(
                 text=translate("resume" if snapshot.paused else "pause", language),
@@ -974,6 +982,60 @@ class TkControlPanel:
                 ),
             )
         self.root.after(100, self._refresh)
+
+    def _refresh_viewport(self, snapshot: ControlPanelSnapshot) -> None:
+        canvas = self.viewport_canvas
+        if canvas is None:
+            return
+        sequence, frame = self.runtime.latest_frame()
+        if frame is not None and sequence != self._viewport_frame_sequence:
+            try:
+                self._viewport_image = self.tk.PhotoImage(data=frame, format="PPM")
+                width = max(1, int(canvas.winfo_width()))
+                height = max(1, int(canvas.winfo_height()))
+                image_width = int(self._viewport_image.width())
+                image_height = int(self._viewport_image.height())
+                x = max(0, (width - image_width) // 2)
+                y = max(0, (height - image_height) // 2)
+                canvas.delete("viewport_frame")
+                canvas.create_image(
+                    x,
+                    y,
+                    anchor="nw",
+                    image=self._viewport_image,
+                    tags=("viewport_frame",),
+                )
+                canvas.tag_lower("viewport_frame")
+                self._viewport_frame_sequence = sequence
+            except Exception as exc:
+                self.viewport_status_var.set(f"Viewport render error: {exc}")
+        if snapshot.error_message:
+            status = "起動失敗"
+        elif snapshot.viewer_connected:
+            status = "Embedded MuJoCo Viewport connected"
+        else:
+            status = "Viewport disconnected"
+        self.viewport_status_var.set(status)
+        canvas.delete("viewport_overlay")
+        overlay_lines = [
+            f"Episode {snapshot.episode}  Step {snapshot.step}/{snapshot.max_steps}",
+            f"Reward {snapshot.reward:.3f}",
+            (
+                "Selected -"
+                if snapshot.selected_joint is None
+                else f"Selected J{snapshot.selected_joint + 1}"
+            ),
+            f"Input {self.input_manager.context.value}",
+        ]
+        canvas.create_text(
+            12,
+            12,
+            anchor="nw",
+            text="\n".join(overlay_lines),
+            fill="#f8fafc",
+            font=("Helvetica", 12, "bold"),
+            tags=("viewport_overlay",),
+        )
 
     @staticmethod
     def _bool_text(value: bool, language: str) -> str:

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+
+import numpy as np
+
 from physical_ai_sandbox.ui.control_panel import ControlCommandQueue, ControlPanelStateStore
 from physical_ai_sandbox.ui.control_types import (
     ControlPanelSnapshot,
@@ -74,7 +78,7 @@ def test_snapshot_message_roundtrip() -> None:
     assert restored.viewer_connected is True
 
 
-def test_runtime_uses_separate_mjpython_viewer_process() -> None:
+def test_runtime_uses_mjpython_for_embedded_viewport_process() -> None:
     runtime = __import__(
         "physical_ai_sandbox.ui.control_panel",
         fromlist=["ControlPanelRuntime"],
@@ -86,7 +90,7 @@ def test_runtime_uses_separate_mjpython_viewer_process() -> None:
     assert "physical_ai_sandbox.ui.simulation_process" in command
 
 
-def test_runtime_no_viewer_uses_current_python() -> None:
+def test_runtime_no_viewport_uses_current_python() -> None:
     runtime = __import__(
         "physical_ai_sandbox.ui.control_panel",
         fromlist=["ControlPanelRuntime"],
@@ -108,3 +112,40 @@ def test_gui_action_mapper_emergency_stop_zeros_pending_action() -> None:
 
     assert event == "emergency stop"
     assert action == [0.0] * 7 + [-1.0]
+
+
+def test_runtime_snapshot_preserves_viewport_connection_flag() -> None:
+    runtime = __import__(
+        "physical_ai_sandbox.ui.control_panel",
+        fromlist=["ControlPanelRuntime"],
+    ).ControlPanelRuntime(show_viewer=False)
+
+    runtime._handle_message(ControlPanelSnapshot(viewer_connected=False).to_message())
+
+    assert runtime.state_store.snapshot().viewer_connected is False
+
+
+def test_runtime_stores_embedded_viewport_frame() -> None:
+    runtime = __import__(
+        "physical_ai_sandbox.ui.control_panel",
+        fromlist=["ControlPanelRuntime"],
+    ).ControlPanelRuntime(show_viewer=True)
+    frame = b"P6\n1 1\n255\n\x00\x01\x02"
+
+    runtime._handle_message(
+        {
+            "type": "frame",
+            "sequence": 7,
+            "ppm": base64.b64encode(frame).decode("ascii"),
+        },
+    )
+
+    assert runtime.latest_frame() == (7, frame)
+
+
+def test_rgb_to_ppm_encodes_tk_photoimage_compatible_frame() -> None:
+    from physical_ai_sandbox.ui.simulation_process import rgb_to_ppm
+
+    frame = np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.uint8)
+
+    assert rgb_to_ppm(frame) == b"P6\n2 1\n255\n\x01\x02\x03\x04\x05\x06"

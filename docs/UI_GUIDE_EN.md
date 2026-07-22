@@ -2,19 +2,21 @@
 
 ## Launch
 
-Launch the control panel and MuJoCo Viewer together:
+Launch the workspace and integrated 3D Viewport:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
 
 Launch with English labels:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py --language en
+uv run python scripts/run_control_panel.py --language en
 ```
 
-Use `mjpython` on macOS because the MuJoCo interactive viewer requires it.
+The workspace runs under normal Python/Tkinter. MuJoCo simulation and offscreen
+rendering run internally in a separate `mjpython` process, and rendered frames
+are displayed in the central Viewport.
 
 ## Control Panel
 
@@ -39,11 +41,12 @@ Use `mjpython` on macOS because the MuJoCo interactive viewer requires it.
 | C | Close gripper |
 | Space | Pause / resume |
 | Enter | Reset |
-| Esc | Quit |
+| Esc | Clear input focus |
 
 ## Existing Viewer
 
-The existing manual viewer remains available:
+The existing manual MuJoCo Viewer remains available as a separate CLI. The
+Workspace ControlPanel path does not open a separate Viewer window.
 
 ```bash
 uv run mjpython scripts/run_manual.py

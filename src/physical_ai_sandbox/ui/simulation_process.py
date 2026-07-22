@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import sys
 import time
 import traceback
+from dataclasses import dataclass
 from multiprocessing.connection import Client
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from physical_ai_sandbox.paths import DEFAULT_CONFIG_PATH
 from physical_ai_sandbox.ui.control_types import ControlPanelSnapshot, GuiActionMapper, PanelCommand
@@ -23,11 +27,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--language", default="ja")
     parser.add_argument("--no-viewer", action="store_true")
+    parser.add_argument("--render-width", type=int, default=720)
+    parser.add_argument("--render-height", type=int, default=480)
+    parser.add_argument("--render-fps", type=float, default=12.0)
     return parser
 
 
 def send_snapshot(conn: Any, snapshot: ControlPanelSnapshot) -> None:
     conn.send(snapshot.to_message())
+
+
+def send_frame(conn: Any, sequence: int, ppm: bytes) -> None:
+    conn.send(
+        {
+            "type": "frame",
+            "sequence": sequence,
+            "ppm": base64.b64encode(ppm).decode("ascii"),
+        },
+    )
 
 
 def send_error(conn: Any, message: str, traceback_text: str) -> None:
@@ -43,7 +60,7 @@ def send_error(conn: Any, message: str, traceback_text: str) -> None:
 def handle_runtime_command(
     command: PanelCommand,
     env: Any,
-    viewer: Any,
+    renderer: Any,
     mapper: GuiActionMapper,
     running: bool,
     paused: bool,
@@ -85,37 +102,47 @@ def handle_runtime_command(
         env.reset()
         return False, True, episode + 1, 0, "scene reloaded"
     if command.name == "reset_camera":
-        if viewer is not None:
-            viewer.cam.azimuth = 135
-            viewer.cam.elevation = -25
-            viewer.cam.distance = 1.35
-            viewer.cam.lookat[:] = [0.45, 0.0, 0.55]
+        if renderer is not None:
+            renderer.reset_camera()
         return running, paused, episode, step, "camera reset"
     mapper_event = mapper.apply(command)
     return running, paused, episode, step, mapper_event or last_event
 
 
-def _update_viewer_overlay(
-    viewer: Any,
-    selected_joint: int | None,
-    running: bool,
-    paused: bool,
-    episode: int,
-    step: int,
-    reward: float,
-) -> None:
-    text = [
-        "Physical AI Sandbox",
-        f"Simulation: {'Running' if running and not paused else 'Paused'}",
-        f"Episode: {episode}  Step: {step}",
-        f"Reward: {reward:.3f}",
-        "Selected: -" if selected_joint is None else f"Selected: J{selected_joint + 1}",
-    ]
-    setter = getattr(viewer, "set_texts", None)
-    if setter is None:
-        return
-    with contextlib.suppress(Exception):
-        setter(text)
+def rgb_to_ppm(rgb: np.ndarray) -> bytes:
+    if rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ValueError(f"RGB frame must have shape (H, W, 3), got {rgb.shape}")
+    height, width, _channels = rgb.shape
+    header = f"P6\n{width} {height}\n255\n".encode("ascii")
+    return header + np.ascontiguousarray(rgb, dtype=np.uint8).tobytes()
+
+
+@dataclass
+class EmbeddedViewportRenderer:
+    model: Any
+    width: int
+    height: int
+
+    def __post_init__(self) -> None:
+        import mujoco
+
+        self._mujoco = mujoco
+        self._renderer = mujoco.Renderer(self.model, height=self.height, width=self.width)
+        self._camera = mujoco.MjvCamera()
+        self.reset_camera()
+
+    def reset_camera(self) -> None:
+        self._camera.azimuth = 135
+        self._camera.elevation = -25
+        self._camera.distance = 1.35
+        self._camera.lookat[:] = [0.45, 0.0, 0.55]
+
+    def render_ppm(self, data: Any) -> bytes:
+        self._renderer.update_scene(data, camera=self._camera)
+        return rgb_to_ppm(self._renderer.render())
+
+    def close(self) -> None:
+        self._renderer.close()
 
 
 def run_simulation(args: argparse.Namespace) -> int:
@@ -139,18 +166,16 @@ def run_simulation(args: argparse.Namespace) -> int:
         selected_joint: int | None = None
         mapper = GuiActionMapper()
         language = normalize_language(args.language)
-        if show_viewer:
-            import mujoco.viewer
-
-            viewer_context = mujoco.viewer.launch_passive(env.model, env.data)
-        else:
-            viewer_context = contextlib.nullcontext(None)
-
-        with viewer_context as viewer:
+        renderer = (
+            EmbeddedViewportRenderer(env.model, width=args.render_width, height=args.render_height)
+            if show_viewer
+            else None
+        )
+        frame_sequence = 0
+        frame_period = 1.0 / max(1.0, float(args.render_fps))
+        last_frame_time = 0.0
+        try:
             while True:
-                if viewer is not None and not viewer.is_running():
-                    last_event = "viewer closed"
-                    break
                 while conn.poll(0):
                     message = conn.recv()
                     if not isinstance(message, dict):
@@ -180,7 +205,7 @@ def run_simulation(args: argparse.Namespace) -> int:
                     running, paused, episode, step, last_event = handle_runtime_command(
                         command,
                         env,
-                        viewer,
+                        renderer,
                         mapper,
                         running,
                         paused,
@@ -218,15 +243,18 @@ def run_simulation(args: argparse.Namespace) -> int:
                         language=language,
                         last_event=last_event,
                         selected_joint=selected_joint,
-                        viewer_connected=viewer is not None and viewer.is_running(),
+                        viewer_connected=renderer is not None,
                     ),
                 )
-                if viewer is not None:
-                    _update_viewer_overlay(
-                        viewer, selected_joint, running, paused, episode, step, reward
-                    )
-                    viewer.sync()
+                now = time.monotonic()
+                if renderer is not None and now - last_frame_time >= frame_period:
+                    send_frame(conn, frame_sequence, renderer.render_ppm(env.data))
+                    frame_sequence += 1
+                    last_frame_time = now
                 time.sleep(env.dt)
+        finally:
+            if renderer is not None:
+                renderer.close()
     except KeyboardInterrupt:
         return 0
     except Exception as exc:

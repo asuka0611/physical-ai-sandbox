@@ -50,7 +50,7 @@
 
 - The new control panel uses Tkinter to keep dependencies minimal. Visual style is functional rather than a full custom design system.
 - XYZ controls are manual action presets mapped onto the existing fixed 8D joint-delta Action contract. They are not inverse kinematics and should not be interpreted as precise Cartesian control.
-- GUI verification still depends on local macOS windowing and `mjpython`. Automated tests cover UI state, command mapping, config compatibility, and MJCF physics-safe visual settings; true manual Viewer checks should be run from the user's Terminal.
+- GUI verification still depends on local macOS windowing and `mjpython`. Automated tests cover UI state, command mapping, embedded Viewport frame IPC, config compatibility, and MJCF physics-safe visual settings; true manual Viewport checks should be run on the user's Mac.
 - The robot is still a lightweight generated Panda-style model, now with visual covers. It does not use official Franka meshes.
 
 ## Phase 4.6
@@ -63,8 +63,8 @@
 
 ## Phase 5 Workspace Remaining Issues
 
-- MuJoCo Viewer is still a separate window by design; full Tk embedding is deferred until offscreen rendering stability is proven.
-- Viewer positioning/fronting uses macOS Accessibility best-effort commands and may require user permission.
+- The ControlPanel path now uses an embedded offscreen-rendered Viewport rather than an external MuJoCo Viewer window.
+- The embedded Viewport is frame-stream based; native MuJoCo Viewer menus, picking, and advanced camera manipulation are not integrated.
 - Timeline replay UI is not complete; evaluation JSON stores action trajectories for future replay work.
-- Dynamic 3D selected-joint text/highlight is limited by official Viewer APIs; visual label sites and UI selection status are implemented first.
+- Dynamic 3D selected-joint text/highlight is currently shown through UI/snapshot/overlay status; visual label sites remain the stable in-scene markers.
 - Phase 6/7 are simulation/mock scaffolds only, with no real hardware or real camera validation.

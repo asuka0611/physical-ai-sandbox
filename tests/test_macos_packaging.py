@@ -12,7 +12,9 @@ def test_macos_build_script_creates_local_launcher_app() -> None:
     assert "swiftc" in text
     assert "LocalLauncher.swift" in text
     assert "py2app" not in text
-    assert "codesign" not in text
+    assert "codesign --force --deep --sign -" in text
+    assert "Developer ID" not in text
+    assert "notarytool" not in text
 
 
 def test_local_launcher_runs_existing_control_panel_without_terminal() -> None:

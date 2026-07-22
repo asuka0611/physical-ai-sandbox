@@ -60,4 +60,7 @@ PLIST
 
 plutil -lint "$APP_PATH/Contents/Info.plist" >/dev/null
 test -x "$EXECUTABLE_PATH"
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - "$APP_PATH" >/dev/null
+fi
 echo "$APP_PATH"

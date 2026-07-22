@@ -73,16 +73,16 @@ reinforcement learning.
 
 ## Run Japanese Control Panel
 
-Launch the Tkinter control panel with the MuJoCo Viewer:
+Launch the Tkinter workspace with the integrated MuJoCo 3D Viewport:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
 
 Launch in English:
 
 ```bash
-uv run mjpython scripts/run_control_panel.py --language en
+uv run python scripts/run_control_panel.py --language en
 ```
 
 The package entrypoint is also available:
@@ -91,12 +91,14 @@ The package entrypoint is also available:
 uv run physical-ai-control-panel --language ja
 ```
 
-The control panel keeps MuJoCo simulation on a worker thread and sends UI
-commands through a thread-safe command queue. It displays run state, Episode,
-Step, Reward, Grasped, Lifted, Success, Recording, Controller, and the latest
-manual event. It supports start, pause/resume, reset, quit, recording
-start/stop, gripper open/close, camera reset, XYZ-style movement buttons,
-rotation buttons, direct J1-J7 joint buttons, and a command-size slider.
+The workspace keeps Tkinter in normal Python and runs MuJoCo simulation plus
+offscreen rendering in a separate `mjpython` process. Rendered RGB frames are
+sent back over IPC and displayed directly in the central 3D Viewport, so the
+ControlPanel path does not open a separate MuJoCo Viewer window. It displays run
+state, Episode, Step, Reward, Grasped, Lifted, Success, Recording, Controller,
+and the latest manual event. It supports start, pause/resume, reset, quit,
+recording start/stop, gripper open/close, camera reset, XYZ-style movement
+buttons, rotation buttons, direct J1-J7 joint buttons, and a command-size slider.
 
 Control-panel keyboard bindings:
 
@@ -498,7 +500,7 @@ opening Terminal:
 
 ```bash
 cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
-uv run mjpython scripts/run_control_panel.py
+uv run python scripts/run_control_panel.py
 ```
 
 Local requirements:
@@ -517,9 +519,10 @@ startup. Logs are stored under:
 ```
 
 The Launcher prevents duplicate `run_control_panel.py` processes and reports
-startup failures with a Japanese dialog. The Tk control panel runs under normal
-Python, while MuJoCo Viewer runs in a separate `mjpython` simulation process. It
-does not bundle Python, MuJoCo, datasets, checkpoints, or project dependencies.
+startup failures with a Japanese dialog. The Tk workspace runs under normal
+Python, while MuJoCo simulation and embedded Viewport rendering run in a
+separate `mjpython` process. It does not bundle Python, MuJoCo, datasets,
+checkpoints, or project dependencies.
 
 Detailed guides:
 
@@ -545,7 +548,7 @@ Known limitations are tracked in `KNOWN_ISSUES.md`. Detailed Phase 1 completion 
 
 ## Integrated Workspace MVP
 
-The macOS control panel now starts as a workspace-style UI: toolbar, scene/policy sidebar, 3D Viewer management area, robot inspector, and bottom Console/Metrics/Evaluation/Timeline tabs. MuJoCo Viewer remains a separate `mjpython` process for stability, with macOS best-effort buttons for Viewer front/position reset.
+The macOS control panel now starts as a workspace-style UI: toolbar, scene/policy sidebar, embedded 3D Viewport, robot inspector, and bottom Console/Metrics/Evaluation/Timeline tabs. The ControlPanel path does not open a separate MuJoCo Viewer window; the simulation process renders frames offscreen and streams them into the central Viewport.
 
 Key UX changes:
 

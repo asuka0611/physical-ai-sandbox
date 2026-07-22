@@ -11,7 +11,10 @@ cd "/Users/miyachiasuka/Documents/prog/Physical AI Sandbox"
 uv run python scripts/run_control_panel.py
 ```
 
-The operation panel runs under normal Python/Tkinter. MuJoCo Viewer runs in a separate `mjpython` simulation process.
+The operation panel runs under normal Python/Tkinter. MuJoCo simulation and
+offscreen rendering run in a separate `mjpython` process, and rendered frames
+are displayed in the central 3D Viewport. The ControlPanel path does not open a
+separate MuJoCo Viewer window.
 
 ## Requirements
 
