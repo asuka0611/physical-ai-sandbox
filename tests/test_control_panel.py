@@ -137,10 +137,21 @@ def test_runtime_stores_embedded_viewport_frame() -> None:
             "type": "frame",
             "sequence": 7,
             "ppm": base64.b64encode(frame).decode("ascii"),
+            "metadata": {"fps": 30.0, "camera": {"distance": 1.2}},
         },
     )
 
     assert runtime.latest_frame() == (7, frame)
+    assert runtime.latest_frame_metadata()["fps"] == 30.0
+
+
+def test_panel_command_allows_structured_camera_payload() -> None:
+    command = PanelCommand("camera_orbit", {"dx": 12, "dy": -4})
+
+    restored = PanelCommand.from_message(command.to_message())
+
+    assert restored.name == "camera_orbit"
+    assert restored.value == {"dx": 12, "dy": -4}
 
 
 def test_rgb_to_ppm_encodes_tk_photoimage_compatible_frame() -> None:

@@ -10,7 +10,7 @@ from physical_ai_sandbox.ui.i18n import Language
 @dataclass(frozen=True, slots=True)
 class PanelCommand:
     name: str
-    value: str | float | int | None = None
+    value: object | None = None
 
     def to_message(self) -> dict[str, object]:
         return {"type": "command", "name": self.name, "value": self.value}
