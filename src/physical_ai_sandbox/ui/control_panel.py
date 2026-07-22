@@ -1115,6 +1115,10 @@ class TkControlPanel:
             with contextlib.suppress(Exception):
                 self.workspace_state["active_tab"] = self.bottom_notebook.index("current")
         self.workspace_state["panel_visible"] = dict(self._panel_visible)
+        if self.workspace_paned is not None:
+            self.workspace_state["workspace_sashes"] = self._sash_positions(self.workspace_paned)
+        if self.vertical_paned is not None:
+            self.workspace_state["vertical_sashes"] = self._sash_positions(self.vertical_paned)
         self.workspace_state_path.parent.mkdir(parents=True, exist_ok=True)
         self.workspace_state_path.write_text(
             json.dumps(self.workspace_state, indent=2, sort_keys=True),
@@ -1136,6 +1140,7 @@ class TkControlPanel:
         if self.bottom_notebook is not None and isinstance(active_tab, int):
             with contextlib.suppress(Exception):
                 self.bottom_notebook.select(active_tab)
+        self._restore_sashes()
 
     def _reset_layout(self) -> None:
         self._maximized = False
@@ -1175,6 +1180,33 @@ class TkControlPanel:
                 self.vertical_paned.add(self.bottom_panel, minsize=90)
             if not self._panel_visible["bottom"] and has_bottom:
                 self.vertical_paned.forget(self.bottom_panel)
+
+    def _restore_sashes(self) -> None:
+        workspace_sashes = self.workspace_state.get("workspace_sashes")
+        vertical_sashes = self.workspace_state.get("vertical_sashes")
+        if isinstance(workspace_sashes, list) and self.workspace_paned is not None:
+            self._place_sashes(self.workspace_paned, workspace_sashes)
+        if isinstance(vertical_sashes, list) and self.vertical_paned is not None:
+            self._place_sashes(self.vertical_paned, vertical_sashes)
+
+    @staticmethod
+    def _sash_positions(paned: object) -> list[list[int]]:
+        positions: list[list[int]] = []
+        for index in range(4):
+            try:
+                x, y = paned.sash_coord(index)  # type: ignore[attr-defined]
+            except Exception:
+                break
+            positions.append([int(x), int(y)])
+        return positions
+
+    @staticmethod
+    def _place_sashes(paned: object, positions: list[object]) -> None:
+        for index, position in enumerate(positions):
+            if not isinstance(position, list | tuple) or len(position) != 2:
+                continue
+            with contextlib.suppress(Exception):
+                paned.sash_place(index, int(position[0]), int(position[1]))  # type: ignore[attr-defined]
 
     def _start_evaluation(self) -> None:
         if self._evaluation_process is not None and self._evaluation_process.poll() is None:
