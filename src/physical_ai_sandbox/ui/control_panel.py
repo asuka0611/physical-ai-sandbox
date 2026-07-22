@@ -31,7 +31,7 @@ class ControlCommandQueue:
     def __init__(self) -> None:
         self._queue: Queue[PanelCommand] = Queue()
 
-    def put(self, name: str, value: str | float | int | None = None) -> None:
+    def put(self, name: str, value: object | None = None) -> None:
         self._queue.put(PanelCommand(name=name, value=value))
 
     def drain(self) -> list[PanelCommand]:
@@ -399,6 +399,7 @@ class TkControlPanel:
         self._viewport_drag: dict[str, object] | None = None
         self._viewport_pointer = (0, 0)
         self._camera_state_sent = False
+        self._save_pending = False
         self._last_viewport_size = (0, 0)
         self._maximized = False
         self._panel_visible = {"left": True, "right": True, "bottom": True}
@@ -418,6 +419,7 @@ class TkControlPanel:
         self._refresh()
         self._build_menu()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.after(200, self._show_workspace_window)
 
     def run(self) -> None:
         self.runtime.start()
@@ -499,6 +501,11 @@ class TkControlPanel:
         self._save_workspace_state()
         self.runtime.stop()
         self.root.after(100, self.root.destroy)
+
+    def _show_workspace_window(self) -> None:
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
 
     def _build(self) -> None:
         tk = self.tk
@@ -845,7 +852,7 @@ class TkControlPanel:
         notebook.add(evaluation, text="Evaluation")
         notebook.add(timeline, text="Timeline")
         notebook.add(problems, text="Problems")
-        notebook.bind("<<NotebookTabChanged>>", lambda _event: self._save_workspace_state())
+        notebook.bind("<<NotebookTabChanged>>", lambda _event: self._schedule_workspace_save())
 
         self.help_text = tk.StringVar(value="")
         tk.Label(
@@ -861,7 +868,7 @@ class TkControlPanel:
             metrics,
             text="Viewport overlay",
             variable=self.overlay_enabled_var,
-            command=self._save_workspace_state,
+            command=self._schedule_workspace_save,
         ).pack(anchor="w", pady=(8, 0))
 
         self.eval_episode_var = tk.StringVar(value="3")
@@ -955,7 +962,7 @@ class TkControlPanel:
 
     def _on_mode_changed(self) -> None:
         self.workspace_state["mode"] = self.mode_var.get()
-        self._save_workspace_state()
+        self._schedule_workspace_save()
 
     def _on_viewport_press(self, event: object) -> str:
         self.root.focus_set()
@@ -1105,6 +1112,7 @@ class TkControlPanel:
             return {}
 
     def _save_workspace_state(self) -> None:
+        self._save_pending = False
         metadata = self.runtime.latest_frame_metadata()
         camera = metadata.get("camera")
         if isinstance(camera, dict):
@@ -1124,6 +1132,12 @@ class TkControlPanel:
             json.dumps(self.workspace_state, indent=2, sort_keys=True),
             encoding="utf-8",
         )
+
+    def _schedule_workspace_save(self) -> None:
+        if self._save_pending:
+            return
+        self._save_pending = True
+        self.root.after(250, self._save_workspace_state)
 
     def _restore_layout(self) -> None:
         panel_visible = self.workspace_state.get("panel_visible")
@@ -1154,13 +1168,13 @@ class TkControlPanel:
         visible = not self._maximized
         self._panel_visible = {"left": visible, "right": visible, "bottom": visible}
         self._apply_panel_visibility()
-        self._save_workspace_state()
+        self._schedule_workspace_save()
 
     def _set_zen_mode(self) -> None:
         self._maximized = True
         self._panel_visible = {"left": False, "right": False, "bottom": False}
         self._apply_panel_visibility()
-        self._save_workspace_state()
+        self._schedule_workspace_save()
 
     def _apply_panel_visibility(self) -> None:
         if self.workspace_paned is not None and self.center_panel is not None:
@@ -1355,7 +1369,9 @@ class TkControlPanel:
                     language,
                 ),
             )
-        self.root.after(33, self._refresh)
+        high_rate_refresh = (snapshot.running and not snapshot.paused) or self._viewport_drag
+        refresh_ms = 33 if high_rate_refresh else 100
+        self.root.after(refresh_ms, self._refresh)
 
     def _refresh_viewport(self, snapshot: ControlPanelSnapshot) -> None:
         canvas = self.viewport_canvas

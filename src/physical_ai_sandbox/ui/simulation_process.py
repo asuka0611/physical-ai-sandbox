@@ -137,6 +137,7 @@ class EmbeddedViewportRenderer:
         self._mujoco = mujoco
         self._renderer = mujoco.Renderer(self.model, height=self.height, width=self.width)
         self._camera = mujoco.MjvCamera()
+        self.dirty = True
         self.reset_camera()
 
     def reset_camera(self) -> None:
@@ -144,6 +145,7 @@ class EmbeddedViewportRenderer:
         self._camera.elevation = -25
         self._camera.distance = 1.35
         self._camera.lookat[:] = [0.45, 0.0, 0.55]
+        self.dirty = True
 
     def apply_command(self, command: PanelCommand) -> str:
         value = command.value if isinstance(command.value, dict) else {}
@@ -163,6 +165,7 @@ class EmbeddedViewportRenderer:
             target = value.get("target")
             if isinstance(target, list | tuple) and len(target) == 3:
                 self._camera.lookat[:] = [float(item) for item in target]
+                self.dirty = True
             return "camera focus"
         if command.name == "camera_state":
             self.set_state(value)
@@ -183,13 +186,17 @@ class EmbeddedViewportRenderer:
     def set_state(self, state: dict[str, object]) -> None:
         if "azimuth" in state:
             self._camera.azimuth = float(state["azimuth"])
+            self.dirty = True
         if "elevation" in state:
             self._camera.elevation = float(state["elevation"])
+            self.dirty = True
         if "distance" in state:
             self._camera.distance = max(0.2, min(6.0, float(state["distance"])))
+            self.dirty = True
         lookat = state.get("lookat")
         if isinstance(lookat, list | tuple) and len(lookat) == 3:
             self._camera.lookat[:] = [float(item) for item in lookat]
+            self.dirty = True
 
     def resize(self, width: int, height: int) -> None:
         width = int(np.clip(width, 240, 1920))
@@ -200,21 +207,25 @@ class EmbeddedViewportRenderer:
         self.height = height
         self._renderer.close()
         self._renderer = self._mujoco.Renderer(self.model, height=self.height, width=self.width)
+        self.dirty = True
 
     def orbit(self, dx: float, dy: float) -> None:
         self._camera.azimuth = float((self._camera.azimuth - dx * 0.35) % 360.0)
         self._camera.elevation = float(np.clip(self._camera.elevation + dy * 0.25, -89.0, 89.0))
+        self.dirty = True
 
     def pan(self, dx: float, dy: float) -> None:
         forward, right, up = self._camera_basis()
         scale = max(0.0008, float(self._camera.distance) * 0.0015)
         del forward
         self._camera.lookat[:] = self._camera.lookat + right * (-dx * scale) + up * (dy * scale)
+        self.dirty = True
 
     def zoom(self, delta: float) -> None:
         factor = 0.90 if delta > 0 else 1.10
         steps = max(1, min(8, int(abs(delta))))
         self._camera.distance = float(np.clip(self._camera.distance * (factor**steps), 0.2, 6.0))
+        self.dirty = True
 
     def set_preset(self, name: str) -> None:
         presets = {
@@ -229,16 +240,20 @@ class EmbeddedViewportRenderer:
         azimuth, elevation = presets.get(name, presets["isometric"])
         self._camera.azimuth = azimuth
         self._camera.elevation = elevation
+        self.dirty = True
 
     def focus_joint(self, data: Any, joint_index: int) -> None:
         site_name = f"joint{joint_index + 1}_label_site"
         site_id = self._mujoco.mj_name2id(self.model, self._mujoco.mjtObj.mjOBJ_SITE, site_name)
         if site_id >= 0:
             self._camera.lookat[:] = np.asarray(data.site_xpos[site_id], dtype=float)
+            self.dirty = True
 
     def render_ppm(self, data: Any) -> bytes:
         self._renderer.update_scene(data, camera=self._camera)
-        return rgb_to_ppm(self._renderer.render())
+        ppm = rgb_to_ppm(self._renderer.render())
+        self.dirty = False
+        return ppm
 
     def frame_metadata(
         self,
@@ -431,7 +446,12 @@ def run_simulation(args: argparse.Namespace) -> int:
                     ),
                 )
                 now = time.monotonic()
+                should_render = False
                 if renderer is not None and now - last_frame_time >= frame_period:
+                    should_render = running and not paused
+                    should_render = should_render or renderer.dirty
+                    should_render = should_render or now - last_frame_time >= 1.0
+                if renderer is not None and should_render:
                     if last_frame_time > 0:
                         measured_fps = 1.0 / max(1e-6, now - last_frame_time)
                     send_frame(
