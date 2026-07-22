@@ -2,8 +2,9 @@
 
 MuJoCo-based Physical AI sandbox for a Panda-style 7-axis robot arm. The project
 now includes the Phase 1 manual-control environment, Phase 2 dataset pipeline,
-Phase 3 offline Behavior Cloning training, and Phase 3.5 closed-loop BC rollout
-safety evaluation.
+Phase 3 offline Behavior Cloning training, Phase 3.5 closed-loop BC rollout
+safety evaluation, Phase 4 PPO smoke training, and Phase 4.5 Japanese UI /
+visual refresh.
 
 ## Requirements
 
@@ -69,6 +70,55 @@ MuJoCo versions, so `[` is the reliable previous-joint fallback for Shift+Tab.
 Headless operation remains the supported path for automated tests and future
 reinforcement learning.
 
+
+## Run Japanese Control Panel
+
+Launch the Tkinter control panel with the MuJoCo Viewer:
+
+```bash
+uv run mjpython scripts/run_control_panel.py
+```
+
+Launch in English:
+
+```bash
+uv run mjpython scripts/run_control_panel.py --language en
+```
+
+The package entrypoint is also available:
+
+```bash
+uv run physical-ai-control-panel --language ja
+```
+
+The control panel keeps MuJoCo simulation on a worker thread and sends UI
+commands through a thread-safe command queue. It displays run state, Episode,
+Step, Reward, Grasped, Lifted, Success, Recording, Controller, and the latest
+manual event. It supports start, pause/resume, reset, quit, recording
+start/stop, gripper open/close, camera reset, XYZ-style movement buttons,
+rotation buttons, direct J1-J7 joint buttons, and a command-size slider.
+
+Control-panel keyboard bindings:
+
+| Key | Action |
+|---|---|
+| W / S | Forward / backward |
+| A / D | Left / right |
+| R / F | Up / down |
+| Q / E | Rotate |
+| O | Open gripper |
+| C | Close gripper |
+| Space | Pause / resume |
+| Enter | Reset |
+| Esc | Quit |
+
+Detailed guides:
+
+- `docs/UI_GUIDE_JA.md`
+- `docs/UI_GUIDE_EN.md`
+
+Screenshot placement: add UI screenshots under `docs/screenshots/`.
+
 ## Run Pick-and-Place Demo
 
 ```bash
@@ -113,6 +163,34 @@ objects:
     static: true
     collision: true
 ```
+
+
+### UI and Visual Settings
+
+```yaml
+ui:
+  language: ja
+  theme: dark
+  show_control_panel: true
+  show_status_overlay: true
+robot_visual:
+  theme: modern_lab
+  accent_color: blue
+```
+
+Older configs without these keys remain valid; defaults are applied by the
+config loader. Japanese strings are used only in the display layer. Internal
+body, joint, actuator, site, Observation, Action, Dataset, and checkpoint
+contracts remain English and unchanged.
+
+### Visual Refresh
+
+The default generated MJCF now uses a modern lab-arm visual theme: off-white
+robot covers, dark-gray joints, blue accent rings, dark gripper covers, an
+orange cube, green translucent target/place markers, blue translucent pick
+marker, red obstacles, neutral-gray table, and a dark grid floor. Added covers,
+rings, plates, cables, and area markers are visual-only geoms with collision
+disabled so the existing physics contract is preserved.
 
 ## Action Contract
 

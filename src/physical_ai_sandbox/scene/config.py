@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,18 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from physical_ai_sandbox.paths import DEFAULT_SCHEMA_PATH
+
+DEFAULT_UI_CONFIG: dict[str, Any] = {
+    "language": "ja",
+    "theme": "dark",
+    "show_control_panel": True,
+    "show_status_overlay": True,
+}
+
+DEFAULT_ROBOT_VISUAL_CONFIG: dict[str, Any] = {
+    "theme": "modern_lab",
+    "accent_color": "blue",
+}
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
@@ -40,10 +53,20 @@ def validate_config(config: dict[str, Any], schema_path: str | Path = DEFAULT_SC
         raise ValueError("Invalid scene config:\n" + "\n".join(messages))
 
 
+def apply_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    merged = deepcopy(config)
+    merged["ui"] = {**DEFAULT_UI_CONFIG, **dict(merged.get("ui", {}))}
+    merged["robot_visual"] = {
+        **DEFAULT_ROBOT_VISUAL_CONFIG,
+        **dict(merged.get("robot_visual", {})),
+    }
+    return merged
+
+
 def load_and_validate_config(
     config_path: str | Path,
     schema_path: str | Path = DEFAULT_SCHEMA_PATH,
 ) -> dict[str, Any]:
     config = load_yaml(config_path)
     validate_config(config, schema_path)
-    return config
+    return apply_config_defaults(config)

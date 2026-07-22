@@ -38,3 +38,12 @@ objects:
     collision: true
 logging:
   root_dir: logs/episodes
+
+ui:
+  language: ja
+  theme: dark
+  show_control_panel: true
+  show_status_overlay: true
+robot_visual:
+  theme: modern_lab
+  accent_color: blue

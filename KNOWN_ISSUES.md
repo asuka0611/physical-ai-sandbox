@@ -45,3 +45,10 @@
 - Initial PPO training uses the same fixed-initial-condition grasp+lift task as Phase 3.6. It does not cover release/place, randomized starts, obstacles, or full Pick-and-Place success.
 - PPO can degrade from the BC-only baseline. All reports must be read with their recorded steps, seed, Episode count, max steps, and initialization mode.
 - The current random PPO smoke comparison can succeed under the extremely narrow fixed condition, so it should not be interpreted as evidence that random initialization is generally sufficient.
+
+## Phase 4.5
+
+- The new control panel uses Tkinter to keep dependencies minimal. Visual style is functional rather than a full custom design system.
+- XYZ controls are manual action presets mapped onto the existing fixed 8D joint-delta Action contract. They are not inverse kinematics and should not be interpreted as precise Cartesian control.
+- GUI verification still depends on local macOS windowing and `mjpython`. Automated tests cover UI state, command mapping, config compatibility, and MJCF physics-safe visual settings; true manual Viewer checks should be run from the user's Terminal.
+- The robot is still a lightweight generated Panda-style model, now with visual covers. It does not use official Franka meshes.

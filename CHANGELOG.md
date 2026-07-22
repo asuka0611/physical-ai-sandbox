@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.5 - 2026-07-21
+
+- Added Phase 4.5 Japanese/English UI translation layer with safe fallback behavior.
+- Added Tkinter control panel with thread-safe command queue, state snapshots, recording controls, gripper controls, XYZ-style controls, rotation controls, J1-J7 direct joint controls, command-size slider, and Japanese keyboard help.
+- Added `scripts/run_control_panel.py` and `physical-ai-control-panel` entrypoint.
+- Added optional `ui` and `robot_visual` config sections with backwards-compatible defaults.
+- Refreshed MJCF visuals with modern lab robot colors, visual-only shell covers, joint/link covers, accent rings, cable visual, translucent pick/place/target areas, updated lighting, camera, table, floor grid, cube, and obstacle colors.
+- Added tests for i18n, fallback language behavior, UI state and command queue logic, backwards-compatible config defaults, MJCF loading, preserved names, visual-only collision disabling, and environment contract regression.
+
 ## 0.4.0 - 2026-07-21
 
 - Added Phase 4 NumPy PPO smoke-training pipeline for the fixed-condition grasp+lift task.
